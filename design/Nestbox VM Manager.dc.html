@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Rounded:opsz,wght,FILL@20..48,400,0..1&display=block" rel="stylesheet">
+<style>
+body{margin:0;background:#0a0b0e;font-family:'Roboto Flex',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#4C8DFF}a:hover{color:#8fb6ff}
+input[type=range]{accent-color:#4C8DFF;width:100%}
+@keyframes blink{50%{opacity:.25}}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;gap:48px;padding:40px 24px;box-sizing:border-box;flex-wrap:wrap">
+<x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" dark="{{ true }}" hint-size="412px,892px">
+<div style="min-height:100%;height:100%;background:#111318;color:#ecedee;display:flex;flex-direction:column;font-family:'Roboto Flex',system-ui,sans-serif">
+
+<sc-if value="{{ isSetup }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:24px;padding:24px 20px;flex:1">
+  <div style="display:flex;flex-direction:column;gap:8px;padding-top:24px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#4C8DFF;letter-spacing:.08em">NESTBOX · FIRST RUN</div>
+    <div style="font-size:28px;font-weight:600;line-height:1.15;text-wrap:pretty">Prepare this device</div>
+    <div style="font-size:14px;color:#9a9da3;line-height:1.5;text-wrap:pretty">MIUI stops background apps to save battery. Nestbox needs these permissions to keep virtual machines running.</div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <sc-for list="{{ checks }}" as="c" hint-placeholder-count="4">
+      <div style="display:flex;align-items:center;gap:14px;padding:14px;background:#1b1f27;border-radius:20px">
+        <span style="font-family:'Material Symbols Rounded';font-size:22px;color:#9a9da3">{{ c.icon }}</span>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+          <div style="font-size:15px;font-weight:500">{{ c.title }}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#9a9da3">{{ c.sub }}</div>
+        </div>
+        <sc-if value="{{ c.done }}" hint-placeholder-val="{{ true }}">
+          <span style="font-family:'Material Symbols Rounded';font-variation-settings:'FILL' 1;font-size:22px;color:#4C8DFF">check_circle</span>
+        </sc-if>
+        <sc-if value="{{ c.todo }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ c.fix }}" style="border:0;border-radius:999px;padding:8px 14px;background:#2b303a;color:#ecedee;font:500 13px 'Roboto Flex';cursor:pointer;min-height:36px">Allow</button>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+  <div style="flex:1"></div>
+  <sc-if value="{{ allDone }}" hint-placeholder-val="{{ false }}">
+    <button onClick="{{ goHome }}" style="border:0;border-radius:999px;height:52px;background:#4C8DFF;color:#00204d;font:600 16px 'Roboto Flex';cursor:pointer">Continue</button>
+  </sc-if>
+  <sc-if value="{{ notDone }}" hint-placeholder-val="{{ true }}">
+    <button style="border:0;border-radius:999px;height:52px;background:#252a33;color:#6b6e73;font:600 16px 'Roboto Flex'">Allow all to continue</button>
+  </sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:20px;padding:8px 16px 16px;flex:1">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px 0">
+    <div style="font-size:24px;font-weight:600">Machines</div>
+    <span style="font-family:'Material Symbols Rounded';font-size:24px;color:#9a9da3;width:44px;height:44px;display:flex;align-items:center;justify-content:center">settings</span>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:14px;padding:16px;background:#1b1f27;border-radius:24px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+      <div style="font-size:15px;font-weight:500">Xiaomi 14 · HyperOS</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#9a9da3">HOST</div>
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9a9da3">Snapdragon 8 Gen 3 · 8 cores · 12 GB</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#9a9da3"><span>Memory reserved by VMs</span><span style="font-family:'JetBrains Mono',monospace;color:#ecedee">{{ ramUsed }} / 12 GB</span></div>
+        <div style="height:6px;background:#2b303a;border-radius:3px;overflow:hidden"><div style="height:100%;width:{{ ramPct }};background:#4C8DFF;border-radius:3px"></div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#9a9da3"><span>Disk images</span><span style="font-family:'JetBrains Mono',monospace;color:#ecedee">{{ diskUsed }} / 256 GB</span></div>
+        <div style="height:6px;background:#2b303a;border-radius:3px;overflow:hidden"><div style="height:100%;width:{{ diskPct }};background:#9a9da3;border-radius:3px"></div></div>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <sc-for list="{{ vmList }}" as="vm" hint-placeholder-count="3">
+      <div onClick="{{ vm.open }}" style="display:flex;align-items:center;gap:14px;padding:14px;background:#1b1f27;border-radius:24px;cursor:pointer" style-hover="background:#222733">
+        <div style="width:48px;height:64px;border-radius:8px;border:1px solid #3a4050;background:repeating-linear-gradient(135deg,#1f2430 0 4px,#262b37 4px 8px);flex-shrink:0"></div>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+          <div style="font-size:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ vm.name }}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#9a9da3">{{ vm.os }} · {{ vm.cpu }} vCPU · {{ vm.ram }} GB</div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#c4c6ca">
+            <span style="width:7px;height:7px;border-radius:50%;background:{{ vm.dot }}"></span>{{ vm.statusLabel }}
+          </div>
+        </div>
+        <button onClick="{{ vm.quick }}" style="border:0;width:44px;height:44px;border-radius:50%;background:#2b303a;color:#ecedee;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">
+          <span style="font-family:'Material Symbols Rounded';font-variation-settings:'FILL' 1;font-size:22px">{{ vm.quickIcon }}</span>
+        </button>
+      </div>
+    </sc-for>
+  </div>
+  <div style="flex:1"></div>
+  <button onClick="{{ newVm }}" style="position:sticky;bottom:16px;align-self:flex-end;border:0;height:56px;padding:0 22px 0 18px;border-radius:24px;background:#4C8DFF;color:#00204d;display:flex;align-items:center;gap:8px;font:600 15px 'Roboto Flex';cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.4)">
+    <span style="font-family:'Material Symbols Rounded';font-size:24px">add</span>New machine
+  </button>
+</div>
+</sc-if>
+
+<sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:20px;padding:8px 16px 24px">
+  <div style="display:flex;align-items:center;gap:4px">
+    <button onClick="{{ goHome }}" style="border:0;background:none;color:#ecedee;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="font-family:'Material Symbols Rounded';font-size:24px">arrow_back</span></button>
+    <div style="flex:1"></div>
+    <span style="font-family:'Material Symbols Rounded';font-size:22px;color:#9a9da3;width:44px;height:44px;display:flex;align-items:center;justify-content:center">more_vert</span>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:6px;padding:0 4px">
+    <div style="font-size:26px;font-weight:600;line-height:1.15">{{ cur.name }}</div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#c4c6ca">
+      <span style="width:7px;height:7px;border-radius:50%;background:{{ cur.dot }}"></span>{{ cur.statusLabel }}
+      <span style="color:#5b5e63">·</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9a9da3">{{ cur.os }} · {{ cur.api }}</span>
+    </div>
+  </div>
+  <div style="height:200px;border-radius:24px;background:repeating-linear-gradient(135deg,#161a21 0 6px,#1c2029 6px 12px);display:flex;align-items:center;justify-content:center">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6b6e73">last frame · guest screenshot</span>
+  </div>
+  <div style="display:flex;gap:10px">
+    <button onClick="{{ startCur }}" style="flex:1;border:0;height:52px;border-radius:999px;background:#4C8DFF;color:#00204d;font:600 16px 'Roboto Flex';display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer">
+      <span style="font-family:'Material Symbols Rounded';font-variation-settings:'FILL' 1;font-size:22px">{{ cur.primaryIcon }}</span>{{ cur.primaryLabel }}
+    </button>
+    <sc-if value="{{ cur.isRunning }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ stopCur }}" style="border:0;width:52px;height:52px;border-radius:50%;background:#2b303a;color:#ecedee;display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="font-family:'Material Symbols Rounded';font-variation-settings:'FILL' 1;font-size:22px">stop</span></button>
+    </sc-if>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+    <sc-for list="{{ cur.specs }}" as="s" hint-placeholder-count="4">
+      <div style="padding:12px 14px;background:#1b1f27;border-radius:20px;display:flex;flex-direction:column;gap:4px">
+        <div style="font-size:12px;color:#9a9da3">{{ s.k }}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:14px">{{ s.v }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px">
+      <div style="font-size:16px;font-weight:600">Snapshots</div>
+      <button onClick="{{ takeSnap }}" style="border:0;background:none;color:#4C8DFF;font:500 14px 'Roboto Flex';display:flex;align-items:center;gap:4px;cursor:pointer;min-height:44px"><span style="font-family:'Material Symbols Rounded';font-size:20px">add_a_photo</span>Take</button>
+    </div>
+    <div style="display:flex;flex-direction:column;background:#1b1f27;border-radius:20px;overflow:hidden">
+      <sc-for list="{{ cur.snaps }}" as="sn" hint-placeholder-count="2">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid #252a33">
+          <span style="font-family:'Material Symbols Rounded';font-size:20px;color:#9a9da3">history</span>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+            <div style="font-size:14px">{{ sn.name }}</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#9a9da3">{{ sn.when }} · {{ sn.size }}</div>
+          </div>
+          <span style="font-size:13px;color:#c4c6ca">Restore</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;background:#1b1f27;border-radius:20px;overflow:hidden">
+    <sc-for list="{{ cur.settings }}" as="st" hint-placeholder-count="4">
+      <div style="display:flex;align-items:center;gap:12px;padding:14px;border-top:1px solid #252a33">
+        <span style="font-family:'Material Symbols Rounded';font-size:20px;color:#9a9da3">{{ st.icon }}</span>
+        <div style="flex:1;font-size:14px">{{ st.k }}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9a9da3">{{ st.v }}</div>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isWizard }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:20px;padding:8px 16px 16px;flex:1">
+  <div style="display:flex;align-items:center;gap:4px">
+    <button onClick="{{ wizBack }}" style="border:0;background:none;color:#ecedee;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="font-family:'Material Symbols Rounded';font-size:24px">{{ backIcon }}</span></button>
+    <div style="flex:1;font-size:16px;font-weight:500">New machine</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9a9da3;padding-right:8px">{{ stepNum }} / 4</div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:0 4px">
+    <sc-for list="{{ stepBars }}" as="b" hint-placeholder-count="4">
+      <div style="height:4px;border-radius:2px;background:{{ b.c }}"></div>
+    </sc-for>
+  </div>
+  <div style="font-size:24px;font-weight:600;padding:4px 4px 0">{{ stepTitle }}</div>
+
+  <sc-if value="{{ step0 }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <sc-for list="{{ images }}" as="im" hint-placeholder-count="5">
+        <div onClick="{{ im.pick }}" style="display:flex;align-items:center;gap:14px;padding:14px;background:#1b1f27;border:1.5px solid {{ im.border }};border-radius:20px;cursor:pointer">
+          <span style="font-family:'Material Symbols Rounded';font-size:22px;color:{{ im.iconC }}">{{ im.icon }}</span>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+            <div style="font-size:15px;font-weight:500">{{ im.name }}</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#9a9da3">{{ im.sub }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ step1 }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;flex-direction:column;gap:6px;padding:8px 4px">
+        <div style="font-size:12px;color:#9a9da3">Name</div>
+        <input value="{{ draft.name }}" onChange="{{ setName }}" style="background:#1b1f27;border-radius:12px;height:48px;padding:0 14px;color:#ecedee;font:15px 'Roboto Flex';outline:none">
+      </div>
+      <sc-for list="{{ sliders }}" as="sl" hint-placeholder-count="3">
+        <div style="display:flex;flex-direction:column;gap:10px;padding:14px;background:#1b1f27;border-radius:20px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <div style="font-size:15px;font-weight:500">{{ sl.label }}</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:15px;color:#4C8DFF">{{ sl.display }}</div>
+          </div>
+          <input type="range" min="{{ sl.min }}" max="{{ sl.max }}" step="{{ sl.step }}" value="{{ sl.value }}" onChange="{{ sl.set }}">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6b6e73">{{ sl.hint }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ step2 }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;flex-direction:column;gap:8px;padding:0 4px">
+        <div style="font-size:12px;color:#9a9da3">Resolution</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <sc-for list="{{ resOpts }}" as="r" hint-placeholder-count="3">
+            <button onClick="{{ r.pick }}" style="border:1.5px solid {{ r.border }};background:{{ r.bg }};color:#ecedee;border-radius:999px;padding:0 14px;height:40px;font:500 13px 'JetBrains Mono';cursor:pointer">{{ r.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;background:#1b1f27;border-radius:20px;overflow:hidden">
+        <sc-for list="{{ toggles }}" as="t" hint-placeholder-count="4">
+          <div onClick="{{ t.flip }}" style="display:flex;align-items:center;gap:12px;padding:14px;border-top:1px solid #252a33;cursor:pointer">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+              <div style="font-size:15px;font-weight:500">{{ t.label }}</div>
+              <div style="font-size:12px;color:#9a9da3;line-height:1.4;text-wrap:pretty">{{ t.sub }}</div>
+            </div>
+            <div style="width:48px;height:28px;border-radius:20px;background:{{ t.track }};position:relative;flex-shrink:0;transition:background .15s">
+              <div style="position:absolute;top:4px;left:{{ t.knobX }};width:20px;height:20px;border-radius:50%;background:{{ t.knob }};transition:left .15s"></div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ step3 }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;background:#1b1f27;border-radius:20px;overflow:hidden">
+      <sc-for list="{{ review }}" as="rv" hint-placeholder-count="6">
+        <div style="display:flex;justify-content:space-between;gap:12px;padding:13px 14px;border-top:1px solid #252a33">
+          <div style="font-size:14px;color:#9a9da3">{{ rv.k }}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:13px;text-align:right">{{ rv.v }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="font-size:12px;color:#9a9da3;line-height:1.5;padding:0 4px;text-wrap:pretty">The image downloads once ({{ imgSize }}) and is reused for future machines.</div>
+  </sc-if>
+
+  <div style="flex:1"></div>
+  <button onClick="{{ wizNext }}" style="border:0;border-radius:999px;height:52px;background:#4C8DFF;color:#00204d;font:600 16px 'Roboto Flex';cursor:pointer">{{ nextLabel }}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ isRun }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;height:100%;background:#0c0e12">
+  <div style="display:flex;align-items:center;gap:6px;padding:4px 8px 8px">
+    <button onClick="{{ leaveRun }}" style="border:0;background:none;color:#ecedee;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="font-family:'Material Symbols Rounded';font-size:24px">arrow_back</span></button>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <div style="font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ cur.name }}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#9a9da3">CPU {{ cpuLive }} · RAM {{ ramLive }}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;padding:0 10px;height:28px;border-radius:999px;background:#1b1f27;font-family:'JetBrains Mono',monospace;font-size:11px;color:{{ pillC }}">
+      <span style="width:6px;height:6px;border-radius:50%;background:{{ pillC }}"></span>{{ pillLabel }}
+    </div>
+  </div>
+  <div style="flex:1;margin:0 14px;border-radius:16px;overflow:hidden;position:relative;background:repeating-linear-gradient(135deg,#141820 0 6px,#191d26 6px 12px);display:flex;flex-direction:column">
+    <sc-if value="{{ booting }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;background:#08090a;display:flex;flex-direction:column;padding:16px;gap:4px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#9fbcf0;line-height:1.5">
+        <sc-for list="{{ logLines }}" as="ln" hint-placeholder-count="3"><div>{{ ln }}</div></sc-for>
+        <div style="animation:blink 1s steps(1) infinite;color:#9fbcf0">▌</div>
+        <div style="flex:1"></div>
+        <div style="display:flex;justify-content:space-between;color:#9a9da3"><span>Booting guest</span><span>{{ bootPct }}</span></div>
+        <div style="height:4px;background:#1f2022;border-radius:2px;overflow:hidden"><div style="height:100%;width:{{ bootPct }};background:#4C8DFF"></div></div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ booted }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9a9da3">guest display</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6b6e73">{{ cur.res }} · touch passthrough</div>
+      </div>
+      <sc-if value="{{ paused }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;inset:0;background:rgba(8,9,10,.72);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+          <span style="font-family:'Material Symbols Rounded';font-variation-settings:'FILL' 1;font-size:44px;color:#ecedee">pause_circle</span>
+          <div style="font-size:14px;color:#c4c6ca">Paused · state held in memory</div>
+        </div>
+      </sc-if>
+      <div style="display:flex;justify-content:space-around;align-items:center;height:44px;background:rgba(0,0,0,.35);color:#c4c6ca">
+        <span style="font-family:'Material Symbols Rounded';font-size:20px">arrow_back_ios_new</span>
+        <span style="font-family:'Material Symbols Rounded';font-size:20px">radio_button_unchecked</span>
+        <span style="font-family:'Material Symbols Rounded';font-size:20px">crop_square</span>
+      </div>
+    </sc-if>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin:12px 14px 12px;padding:6px;background:#1b1f27;border-radius:999px">
+    <sc-for list="{{ tools }}" as="tl" hint-placeholder-count="5">
+      <button onClick="{{ tl.act }}" style="border:0;width:48px;height:48px;border-radius:50%;background:{{ tl.bg }};color:{{ tl.c }};display:flex;align-items:center;justify-content:center;cursor:pointer">
+        <span style="font-family:'Material Symbols Rounded';font-size:22px">{{ tl.icon }}</span>
+      </button>
+    </sc-for>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+  <div style="position:sticky;bottom:16px;margin:0 16px;padding:12px 16px;border-radius:12px;background:#ecedee;color:#111318;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.4)">{{ toast }}</div>
+</sc-if>
+</div>
+</x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;First-run setup&quot;,&quot;Home&quot;],&quot;default&quot;:&quot;Home&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;bootSpeed&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Realistic&quot;,&quot;Instant&quot;],&quot;default&quot;:&quot;Realistic&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const ACC = '#4C8DFF';
+const AMB = 'oklch(0.82 0.13 75)';
+const IMAGES = [
+  { id: 'a15', name: 'Android 15', os: 'Android 15', api: 'API 35', sub: 'API 35 · arm64 · 1.9 GB', size: '1.9 GB', icon: 'android' },
+  { id: 'a14', name: 'Android 14', os: 'Android 14', api: 'API 34', sub: 'API 34 · arm64 · 1.7 GB', size: '1.7 GB', icon: 'android' },
+  { id: 'a13', name: 'Android 13', os: 'Android 13', api: 'API 33', sub: 'API 33 · arm64 · 1.5 GB', size: '1.5 GB', icon: 'android' },
+  { id: 'a9', name: 'Android 9 Pie', os: 'Android 9', api: 'API 28', sub: 'API 28 · arm64 · 0.9 GB', size: '0.9 GB', icon: 'android' },
+  { id: 'imp', name: 'Import image', os: 'Custom', api: 'IMG', sub: '.img · .iso · .qcow2 from storage', size: 'local file', icon: 'upload_file' },
+];
+const RES = ['720×1600', '1080×2400', '1440×3200'];
+const LOG = [
+  '[ 0.000] Booting guest kernel 6.1.57-android',
+  '[ 0.412] kvm: vcpu 0-3 online',
+  '[ 1.208] virtio-gpu: host accel via Adreno 750',
+  '[ 2.031] init: mount /system ext4 ro',
+  '[ 2.877] init: mount /data f2fs rw',
+  '[ 3.640] zygote64: started',
+  '[ 5.115] system_server: ready',
+  '[ 6.002] sys.boot_completed=1',
+];
+
+class Component extends DCLogic {
+  state = {
+    screen: this.props.startScreen === 'Home' ? 'home' : 'setup',
+    checks: { battery: false, autostart: false },
+    vms: [
+      { name: 'Daily Pixel', os: 'Android 14', api: 'API 34', cpu: 4, ram: 4, disk: 32, res: '1080×2400', gpu: true, root: false, gapps: true, status: 'running',
+        snaps: [{ name: 'Clean install', when: 'Oct 12 · 14:02', size: '2.1 GB' }, { name: 'Before app update', when: 'Oct 27 · 09:40', size: '3.4 GB' }] },
+      { name: 'MIUI Test Bench', os: 'Android 13', api: 'API 33', cpu: 2, ram: 3, disk: 24, res: '1080×2400', gpu: true, root: true, gapps: false, status: 'stopped',
+        snaps: [{ name: 'Rooted baseline', when: 'Sep 30 · 18:15', size: '1.8 GB' }] },
+      { name: 'Legacy Pie', os: 'Android 9', api: 'API 28', cpu: 2, ram: 2, disk: 16, res: '720×1600', gpu: false, root: false, gapps: true, status: 'saved', snaps: [] },
+    ],
+    sel: 0, step: 0,
+    draft: null, boot: 0, paused: false, toast: null,
+  };
+
+  newDraft() { return { image: 'a14', name: 'Android VM 4', cpu: 4, ram: 4, disk: 32, res: '1080×2400', gpu: true, root: false, gapps: true, net: true }; }
+
+  componentWillUnmount() { clearInterval(this.timer); clearTimeout(this.toastT); }
+
+  showToast(t) { clearTimeout(this.toastT); this.setState({ toast: t }); this.toastT = setTimeout(() => this.setState({ toast: null }), 2200); }
+
+  setVm(i, patch) { this.setState(s => ({ vms: s.vms.map((v, j) => j === i ? { ...v, ...patch } : v) })); }
+
+  start(i) {
+    const v = this.state.vms[i];
+    if (v.status === 'running') { this.setState({ sel: i, screen: 'run', boot: 100, paused: false }); return; }
+    const fast = this.props.bootSpeed === 'Instant';
+    this.setVm(i, { status: 'running' });
+    this.setState({ sel: i, screen: 'run', boot: v.status === 'saved' || fast ? 100 : 0, paused: false });
+    clearInterval(this.timer);
+    this.timer = setInterval(() => {
+      this.setState(s => s.boot >= 100 ? null : { boot: Math.min(100, s.boot + 3) });
+      if (this.state.boot >= 100) clearInterval(this.timer);
+    }, 110);
+  }
+
+  stop(i, saved) { clearInterval(this.timer); this.setVm(i, { status: saved ? 'saved' : 'stopped' }); }
+
+  renderVals() {
+    const s = this.state;
+    const label = { running: 'Running', stopped: 'Powered off', saved: 'Saved state' };
+    const dot = { running: ACC, stopped: '#5b5e63', saved: AMB };
+    const running = s.vms.filter(v => v.status === 'running');
+    const ramUsed = running.reduce((a, v) => a + v.ram, 0);
+    const diskUsed = s.vms.reduce((a, v) => a + v.disk, 0);
+
+    const checks = [
+      { icon: 'memory', title: 'Hardware virtualization', sub: 'pKVM available · arm64', done: true },
+      { icon: 'battery_saver', title: 'No battery restrictions', sub: s.checks.battery ? 'Allowed' : 'Settings › Battery saver', done: s.checks.battery, key: 'battery' },
+      { icon: 'restart_alt', title: 'Autostart', sub: s.checks.autostart ? 'Allowed' : 'Security › Autostart', done: s.checks.autostart, key: 'autostart' },
+      { icon: 'sd_storage', title: 'Storage for disk images', sub: '118 GB free', done: true },
+    ].map(c => ({ ...c, todo: !c.done, fix: () => this.setState(st => ({ checks: { ...st.checks, [c.key]: true } })) }));
+    const allDone = checks.every(c => c.done);
+
+    const vmList = s.vms.map((v, i) => ({
+      ...v, dot: dot[v.status], statusLabel: label[v.status],
+      quickIcon: v.status === 'running' ? 'open_in_full' : 'play_arrow',
+      open: () => this.setState({ sel: i, screen: 'detail' }),
+      quick: e => { e.stopPropagation(); this.start(i); },
+    }));
+
+    const v = s.vms[s.sel] || s.vms[0];
+    const cur = v ? {
+      ...v, dot: dot[v.status], statusLabel: label[v.status], isRunning: v.status === 'running',
+      primaryIcon: v.status === 'running' ? 'open_in_full' : 'play_arrow',
+      primaryLabel: v.status === 'running' ? 'Show display' : v.status === 'saved' ? 'Resume' : 'Start',
+      specs: [{ k: 'Processor', v: v.cpu + ' vCPU' }, { k: 'Memory', v: v.ram + ' GB' }, { k: 'Storage', v: v.disk + ' GB' }, { k: 'Display', v: v.res }],
+      snaps: v.snaps.length ? v.snaps : [{ name: 'No snapshots yet', when: 'Take one to save state', size: '—' }],
+      settings: [
+        { icon: 'lan', k: 'Network', v: 'NAT' },
+        { icon: 'folder_shared', k: 'Shared folder', v: '/sdcard/Nestbox' },
+        { icon: 'speed', k: 'GPU', v: v.gpu ? 'Host accel' : 'Software' },
+        { icon: 'admin_panel_settings', k: 'Root', v: v.root ? 'Enabled' : 'Off' },
+        { icon: 'shop', k: 'Google services', v: v.gapps ? 'Installed' : 'None' },
+      ],
+    } : {};
+
+    const d = s.draft || this.newDraft();
+    const setD = p => this.setState(st => ({ draft: { ...(st.draft || this.newDraft()), ...p } }));
+    const img = IMAGES.find(x => x.id === d.image);
+    const images = IMAGES.map(im => ({ ...im, border: im.id === d.image ? ACC : '#2b303a', iconC: im.id === d.image ? ACC : '#9a9da3', pick: () => setD({ image: im.id }) }));
+    const sliders = [
+      { label: 'Processor', display: d.cpu + ' vCPU', min: 1, max: 6, step: 1, value: d.cpu, hint: 'Host has 8 cores · keep 2 for the system', set: e => setD({ cpu: +e.target.value }) },
+      { label: 'Memory', display: d.ram + ' GB', min: 2, max: 8, step: 1, value: d.ram, hint: (12 - ramUsed) + ' GB free on host right now', set: e => setD({ ram: +e.target.value }) },
+      { label: 'Storage', display: d.disk + ' GB', min: 8, max: 128, step: 8, value: d.disk, hint: 'Grows on demand · 118 GB free', set: e => setD({ disk: +e.target.value }) },
+    ];
+    const resOpts = RES.map(r => ({ label: r, border: r === d.res ? ACC : '#2b303a', bg: r === d.res ? '#1f2f4d' : '#1b1f27', pick: () => setD({ res: r }) }));
+    const toggles = [
+      { k: 'gpu', label: 'GPU acceleration', sub: 'Renders through the host Adreno GPU' },
+      { k: 'gapps', label: 'Google services', sub: 'Play Store and Play Services in the guest' },
+      { k: 'root', label: 'Root access', sub: 'Adds su to the guest system image' },
+      { k: 'net', label: 'Network', sub: 'Share the host connection via NAT' },
+    ].map(t => ({ ...t, track: d[t.k] ? ACC : '#3a4050', knob: d[t.k] ? '#00204d' : '#9a9da3', knobX: d[t.k] ? '24px' : '4px', flip: () => setD({ [t.k]: !d[t.k] }) }));
+    const review = [
+      { k: 'Name', v: d.name }, { k: 'System', v: img.name + ' · ' + img.api }, { k: 'Processor', v: d.cpu + ' vCPU' },
+      { k: 'Memory', v: d.ram + ' GB' }, { k: 'Storage', v: d.disk + ' GB' }, { k: 'Display', v: d.res },
+      { k: 'Extras', v: [d.gpu && 'GPU', d.gapps && 'GMS', d.root && 'Root', d.net && 'Net'].filter(Boolean).join(' · ') || 'None' },
+    ];
+    const titles = ['Choose a system', 'Resources', 'Display & features', 'Review'];
+
+    const booting = s.screen === 'run' && s.boot < 100;
+    const nLog = Math.ceil((s.boot / 100) * LOG.length);
+    const t = Date.now() / 1000;
+
+    return {
+      isSetup: s.screen === 'setup', isHome: s.screen === 'home', isDetail: s.screen === 'detail', isWizard: s.screen === 'wizard', isRun: s.screen === 'run',
+      checks, allDone, notDone: !allDone,
+      goHome: () => this.setState({ screen: 'home' }),
+      ramUsed: ramUsed + ' GB', ramPct: Math.min(100, ramUsed / 12 * 100) + '%',
+      diskUsed: diskUsed + ' GB', diskPct: diskUsed / 256 * 100 + '%',
+      vmList, cur,
+      newVm: () => this.setState({ screen: 'wizard', step: 0, draft: { ...this.newDraft(), name: 'Android VM ' + (s.vms.length + 1) } }),
+      startCur: () => this.start(s.sel),
+      stopCur: () => { this.stop(s.sel); this.showToast('Machine powered off'); },
+      takeSnap: () => {
+        const n = new Date();
+        this.setVm(s.sel, { snaps: [{ name: 'Snapshot ' + (v.snaps.length + 1), when: 'Today · ' + n.toTimeString().slice(0, 5), size: (1.5 + v.ram * 0.4).toFixed(1) + ' GB' }, ...v.snaps] });
+        this.showToast('Snapshot saved');
+      },
+      step0: s.step === 0, step1: s.step === 1, step2: s.step === 2, step3: s.step === 3,
+      stepNum: s.step + 1, stepTitle: titles[s.step],
+      stepBars: [0, 1, 2, 3].map(i => ({ c: i <= s.step ? ACC : '#2b303a' })),
+      backIcon: s.step === 0 ? 'close' : 'arrow_back',
+      wizBack: () => s.step === 0 ? this.setState({ screen: 'home' }) : this.setState({ step: s.step - 1 }),
+      nextLabel: s.step === 3 ? 'Create and start' : 'Next',
+      wizNext: () => {
+        if (s.step < 3) return this.setState({ step: s.step + 1 });
+        const nv = { name: d.name, os: img.os, api: img.api, cpu: d.cpu, ram: d.ram, disk: d.disk, res: d.res, gpu: d.gpu, root: d.root, gapps: d.gapps, status: 'stopped', snaps: [] };
+        const idx = s.vms.length;
+        this.setState({ vms: [...s.vms, nv] }, () => this.start(idx));
+      },
+      draft: d, setName: e => setD({ name: e.target.value }),
+      images, sliders, resOpts, toggles, review, imgSize: img.size,
+      booting, booted: s.screen === 'run' && s.boot >= 100, paused: s.paused,
+      bootPct: s.boot + '%', logLines: LOG.slice(0, Math.max(1, nLog)),
+      cpuLive: booting ? (60 + (s.boot % 30)) + '%' : s.paused ? '0%' : (8 + Math.round(Math.abs(Math.sin(t)) * 14)) + '%',
+      ramLive: (booting ? (v.ram * s.boot / 100 * 0.6).toFixed(1) : (v.ram * 0.62).toFixed(1)) + ' / ' + v.ram + ' GB',
+      pillC: booting ? AMB : s.paused ? '#9a9da3' : ACC,
+      pillLabel: booting ? 'BOOT' : s.paused ? 'PAUSED' : 'LIVE',
+      leaveRun: () => this.setState({ screen: 'detail' }),
+      tools: [
+        { icon: s.paused ? 'play_arrow' : 'pause', act: () => !booting && this.setState({ paused: !s.paused }) },
+        { icon: 'photo_camera', act: () => this.showToast('Screenshot saved to /Pictures/Nestbox') },
+        { icon: 'screen_rotation', act: () => this.showToast('Rotated guest display') },
+        { icon: 'save', act: () => { this.stop(s.sel, true); this.setState({ screen: 'detail' }); this.showToast('State saved · resume anytime'); } },
+        { icon: 'power_settings_new', act: () => { this.stop(s.sel); this.setState({ screen: 'detail' }); this.showToast('Machine powered off'); }, danger: true },
+      ].map(x => ({ ...x, bg: x.danger ? 'oklch(0.35 0.08 25)' : 'transparent', c: x.danger ? 'oklch(0.85 0.08 25)' : '#ecedee' })),
+      hasToast: !!s.toast, toast: s.toast,
+    };
+  }
+}
+</script>
+</body>
+</html>

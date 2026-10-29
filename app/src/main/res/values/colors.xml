@@ -1,0 +1,5 @@
+<resources>
+    <color name="nb_bg">#111318</color>
+    <color name="nb_accent">#4C8DFF</color>
+    <color name="nb_on_accent">#00204D</color>
+</resources>

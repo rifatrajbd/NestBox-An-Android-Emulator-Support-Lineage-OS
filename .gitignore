@@ -1,0 +1,16 @@
+.gradle/
+build/
+/local.properties
+/.idea/
+*.iml
+.kotlin/
+captures/
+
+# Local development notes, not part of the project
+CLAUDE.md
+.claude/
+design/START_HERE.md
+
+# Engine binaries are not redistributed: scripts/fetch_engines.py downloads them
+# and scripts/build_tawcroot.sh builds libtawcroot.so (see README).
+app/src/main/jniLibs/
