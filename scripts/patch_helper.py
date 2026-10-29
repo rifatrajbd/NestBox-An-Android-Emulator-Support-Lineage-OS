@@ -331,12 +331,53 @@ bool nb_apply_overlay(const Layout& l, std::string* error) {
             while (at < t->size()) {
                 const size_t nl = t->find('\n', at);
                 const size_t end = nl == std::string::npos ? t->size() : nl + 1;
-                const std::string line = t->substr(at, end - at);
+                std::string line = t->substr(at, end - at);
                 at = end;
-                if (line.find("task_profiles") == std::string::npos) out += line;
+                if (line.find("task_profiles") != std::string::npos) continue;
+                // the context_hub group (AID) may not exist on Android 10; an unknown group voids the service
+                const size_t ch = line.find(" context_hub");
+                if (ch != std::string::npos) line.erase(ch, 12);
+                out += line;
             }
             if (out != *t && !write_mode(vrc, out, 0644, error)) return false;
         }
+        // Android 10 zygote binds /mnt/runtime/<mode> onto /storage and /mnt/user/0 onto
+        // /storage/self for every app (13 uses /mnt/user only); without FUSE nothing creates the
+        // emulated views, and the fork fails. Named to parse after nestbox-shared.rc (whose Host
+        // bind the recursive binds carry along) and before vine-rootless.rc.
+        std::string q = "# NestBox: Android 10 emulated storage without FUSE\non post-fs-data\n"
+                        "    mkdir /data/media/0 0770 media_rw media_rw\n"
+                        "    mkdir /mnt/user 0755 root root\n"
+                        "    mkdir /mnt/user/0 0755 root root\n"
+                        "    symlink /storage/emulated/0 /mnt/user/0/primary\n";
+        for (const char* m : {"default", "read", "write", "full"}) {
+            const std::string base = std::string("/mnt/runtime/") + m;
+            q += "    mkdir " + base + " 0755 root root\n";
+            q += "    mkdir " + base + "/emulated 0755 root root\n";
+            q += "    mount none /data/media " + base + "/emulated bind rec\n";
+        }
+        // Earlier NestBox builds dropped the audio HAL from the vendor manifest with its 32-bit
+        // service; vine_hal_service serves it now, and clients refuse undeclared HALs: restore it.
+        const std::string vm = R + "/vendor/etc/vintf/manifest.xml";
+        if (auto mx = read_file(vm)) {
+            std::string m = *mx;
+            const struct { const char* hal; const char* iface; } want[] = {
+                {"android.hardware.audio", "IDevicesFactory"}, {"android.hardware.audio.effect", "IEffectsFactory"}};
+            for (const auto& w : want) {
+                if (m.find(std::string("<name>") + w.hal + "</name>") != std::string::npos) continue;
+                const size_t end = m.rfind("</manifest>");
+                if (end == std::string::npos) break;
+                m.insert(end, std::string("    <hal format=\"hidl\">\n        <name>") + w.hal +
+                                  "</name>\n        <transport>hwbinder</transport>\n        <version>4.0</version>\n"
+                                  "        <interface>\n            <name>" + w.iface +
+                                  "</name>\n            <instance>default</instance>\n        </interface>\n    </hal>\n");
+            }
+            if (m != *mx && !write_mode(vm, m, 0644, error)) return false;
+        }
+        const std::string qdir = R + "/system/product/etc/init";
+        if (!mkdirs_or_fail(qdir, error) || !write_mode(qdir + "/nestbox-storage-q.rc", q, 0644, error)) return false;
+    } else if (!remove_if_exists(R + "/system/product/etc/init/nestbox-storage-q.rc", error)) {
+        return false;
     }
     if (!nb_copy_tree(l.instance + "/nestbox.files", R, error)) return false;
     const std::string init_dir = R + "/system/product/etc/init";
@@ -365,6 +406,25 @@ tail = "    return mkdirs_or_fail(l.run + \"/pulse\", error);\n}"
 if tail not in s:
     raise SystemExit("prepare_rootfs end not found")
 s = s.replace(tail, "    if (!mkdirs_or_fail(l.run + \"/pulse\", error)) return false;\n    return nb_apply_overlay(l, error);\n}", 1)
+
+# Android 10 vendors name their 32-bit audio service android.hardware.audio@2.0-service (13:
+# android.hardware.audio.service). Serve its 64-bit implementations the same way, keep its VINTF
+# entry (clients refuse undeclared HALs), and drop its rc so init does not exec a 32-bit binary.
+old_audio = """    const bool own_audio_hal = !o.host_has_32bit && is_regular_file(hal_service) &&
+                               is_elf32(R + "/vendor/bin/hw/android.hardware.audio.service");"""
+new_audio = """    const bool q_audio = !o.host_has_32bit && is_regular_file(hal_service) &&
+                         is_elf32(R + "/vendor/bin/hw/android.hardware.audio@2.0-service");
+    const bool own_audio_hal = q_audio || (!o.host_has_32bit && is_regular_file(hal_service) &&
+                               is_elf32(R + "/vendor/bin/hw/android.hardware.audio.service"));"""
+if old_audio not in s:
+    raise SystemExit("own_audio_hal not found")
+s = s.replace(old_audio, new_audio, 1)
+old_keep = """        if (!drop_32bit_services(R, own_audio_hal ? "android.hardware.audio.service" : "", error)) return false;"""
+new_keep = """        if (!drop_32bit_services(R, q_audio ? "android.hardware.audio" : own_audio_hal ? "android.hardware.audio.service" : "", error)) return false;
+        if (q_audio) unlink((R + "/vendor/etc/init/android.hardware.audio@2.0-service.rc").c_str());"""
+if old_keep not in s:
+    raise SystemExit("drop_32bit_services call not found")
+s = s.replace(old_keep, new_keep, 1)
 
 open(path, "w", encoding="utf-8").write(s)
 print("patched", path)

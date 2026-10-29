@@ -65,7 +65,41 @@ class ClassicEngine(private val context: Context, private val settings: AppSetti
     private var server: LocalServerSocket? = null
     private var watchdog: Job? = null
 
-    private fun rootfs(id: String) = File(context.filesDir, "vms/$id/rootfs")
+    private fun home(id: String) = File(context.filesDir, "vms/$id/rootfs")
+
+    /** The machine's rootfs: at the fixed path while it is the active Classic machine, else in its folder. */
+    private fun rootfs(id: String): File =
+        if (!isLink(activeRootfs) && ownerOf(activeRootfs) == id) activeRootfs else home(id)
+
+    private fun ownerOf(dir: File) = runCatching { File(dir, OWNER).readText().trim() }.getOrNull()
+    private fun isLink(f: File) = runCatching { android.system.OsConstants.S_ISLNK(Os.lstat(f.path).st_mode) }.getOrDefault(false)
+
+    /**
+     * Twoyi's libc and loader rebuild every guest path from /data/data/<app>/rootfs. A link there
+     * resolves elsewhere, and every program init started died at once (signal 1), so the running
+     * machine's rootfs is moved to that path as a real folder; another machine's goes back home.
+     */
+    private fun activate(id: String) {
+        if (isLink(activeRootfs)) Os.remove(activeRootfs.path) // NestBox 0.6.5 and older
+        if (activeRootfs.exists()) {
+            val owner = ownerOf(activeRootfs)
+            if (owner == id) return
+            val ownerHome = owner?.let { home(it) }
+            when {
+                owner != null && File(context.filesDir, "vms/$owner").isDirectory && !ownerHome!!.exists() -> {
+                    if (!activeRootfs.renameTo(ownerHome)) throw IOException("Could not move machine $owner's system back")
+                }
+                owner != null && !File(context.filesDir, "vms/$owner").isDirectory -> app.nestbox.engine.MachineFiles.deleteTree(activeRootfs)
+                else -> {
+                    val aside = File(dataDir, "rootfs.old-${System.currentTimeMillis()}")
+                    if (!activeRootfs.renameTo(aside)) throw IOException("Something is in the way at $activeRootfs")
+                }
+            }
+        }
+        val mine = home(id)
+        File(mine, OWNER).writeText(id)
+        if (!mine.renameTo(activeRootfs)) throw IOException("Could not move the system into place")
+    }
 
     private fun line(text: String, pct: Float) {
         synchronized(log) {
@@ -116,18 +150,15 @@ class ClassicEngine(private val context: Context, private val settings: AppSetti
 
     /** Twoyi's RomManager.initRootfs + ensureBootFiles, per machine. */
     private fun bootFiles(vm: VmConfig) {
-        val root = rootfs(vm.id)
-        // The fixed rootfs path points at this machine.
-        runCatching { Os.remove(activeRootfs.path) }
-        if (activeRootfs.exists()) activeRootfs.deleteRecursively()
-        Os.symlink(root.path, activeRootfs.path)
+        // Guest processes left over from a killed run would hold the old sockets.
+        ProcUtil.kill(ProcUtil.orphansUnder(home(vm.id)) + ProcUtil.orphansUnder(activeRootfs))
+        activate(vm.id)
+        val root = activeRootfs
         val loader = File(dataDir, "loader64")
         runCatching { Os.remove(loader.path) }
         Os.symlink(loaderPath(), loader.path)
         listOf("dev/input", "dev/socket", "dev/maps").forEach { File(root, it).mkdirs() }
         File(dataDir, "socket").mkdirs()
-        // Guest processes left over from a killed run would hold the old sockets.
-        ProcUtil.kill(ProcUtil.orphansUnder(root) + ProcUtil.orphansUnder(activeRootfs))
         // Language, timezone and density, like Twoyi.
         val region = Catalog.region(vm.spoof.region)
         val tz = if (region.code == "Off") TimeZone.getDefault().id else region.tz
@@ -400,6 +431,8 @@ class ClassicEngine(private val context: Context, private val settings: AppSetti
 
     private companion object {
         val REBOOT_MARKS = listOf("Reboot start", "shutdown_command", "sys.powerctl", "umounted /dev/block", "critical process")
+        /** In a rootfs folder: the machine it belongs to. */
+        const val OWNER = ".nestbox-machine"
     }
 
     private fun loaderPath() = File(context.applicationInfo.nativeLibraryDir, "libloader.so").path

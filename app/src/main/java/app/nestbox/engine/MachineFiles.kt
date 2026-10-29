@@ -10,10 +10,12 @@ object MachineFiles {
 
     fun delete(context: Context, id: String) {
         val d = dir(context, id)
-        // The fixed Classic rootfs link may point into this machine.
-        val link = File("/data/data/${context.packageName}/rootfs")
-        runCatching {
-            if (Os.readlink(link.path).startsWith(d.path)) Os.remove(link.path)
+        // The fixed Classic rootfs path may hold this machine's system (or, before 0.6.7, a link to it).
+        val fixed = File("/data/data/${context.packageName}/rootfs")
+        if (isLink(fixed)) {
+            runCatching { if (Os.readlink(fixed.path).startsWith(d.path)) Os.remove(fixed.path) }
+        } else if (runCatching { File(fixed, ".nestbox-machine").readText().trim() }.getOrNull() == id) {
+            deleteTree(fixed)
         }
         context.getSharedPreferences("slots", Context.MODE_PRIVATE).edit().remove(id).apply()
         File(context.filesDir, "roms").listFiles { f -> f.name.startsWith("import-$id") }?.forEach { it.delete() }

@@ -62,17 +62,9 @@ object GuestProps {
         // SELinux process-label checks), and the marker that turns on tawcroot's SELinux shims.
         val compatMarker = File(guest, "nestbox.compat-q")
         if (q) {
-            val init = File(files, "system/bin/init")
-            init.parentFile?.mkdirs()
-            assets.open("guest/android10/init").use { i -> init.outputStream().use { i.copyTo(it) } }
-            Os.chmod(init.path, 0b111_101_101) // 0755
-            // Waydroid's HIDL library, which its vendor's display HAL needs (isHostHwBinder)
-            for (lib in assets.list("guest/android10/vndk-sp-29").orEmpty()) {
-                val dst = File(files, "system/lib64/vndk-sp-29/$lib")
-                dst.parentFile?.mkdirs()
-                assets.open("guest/android10/vndk-sp-29/$lib").use { i -> dst.outputStream().use { i.copyTo(it) } }
-                Os.chmod(dst.path, 0b110_100_100) // 0644
-            }
+            // assets/guest/android10/overlay mirrors the guest: Waydroid's Android 10 init, its HIDL
+            // library (the vendor's display HAL needs isHostHwBinder) and the hosthals.xml it reads
+            copyAssetTree(assets, "guest/android10/overlay", files)
             File(files, Q_MARKER).writeText("1\n")
             compatMarker.writeText("1\n")
         } else compatMarker.delete()
@@ -95,6 +87,18 @@ object GuestProps {
     /** In the guest's root: tawcroot reads it to enable the Android 10 SELinux shims. */
     private const val Q_MARKER = ".nestbox-selinux-compat"
     private const val NL = "\n"
+
+    /** Copies an asset folder into [dst]; files under a bin/ folder get 0755, others 0644. */
+    private fun copyAssetTree(assets: android.content.res.AssetManager, path: String, dst: File) {
+        val children = assets.list(path).orEmpty()
+        if (children.isEmpty()) {
+            dst.parentFile?.mkdirs()
+            assets.open(path).use { i -> dst.outputStream().use { i.copyTo(it) } }
+            Os.chmod(dst.path, if ("/bin/" in path) 0b111_101_101 else 0b110_100_100)
+            return
+        }
+        for (c in children) copyAssetTree(assets, "$path/$c", File(dst, c))
+    }
 
     private fun install(src: File, dst: File, mode: Int) {
         dst.parentFile?.mkdirs()
