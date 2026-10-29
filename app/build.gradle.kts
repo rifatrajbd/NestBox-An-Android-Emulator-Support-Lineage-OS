@@ -10,14 +10,14 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        // 8 characters on purpose: Classic mode rewrites Twoyi's built-in "/data/data/io.twoyi" paths
-        // to "/data/data/app.nbox", which must be exactly the same length.
+        // Kept from 0.7 so updates install over existing machines
         applicationId = "app.nbox"
         minSdk = 29
-        // 28 like Twoyi: Classic mode runs the guest's ./init from app storage, which Android blocks at 29+.
+        // 28: legacy storage for the shared folder (/sdcard/Nestbox) and boot logs, and the engine may
+        // run guest programs from app storage, which Android blocks for apps targeting 29+.
         targetSdk = 28
-        versionCode = 15
-        versionName = "0.7.0"
+        versionCode = 16
+        versionName = "0.8.0"
         ndk { abiFilters += "arm64-v8a" }
     }
 
@@ -64,9 +64,6 @@ dependencies {
     implementation(libs.libadb.android)
     implementation(libs.sun.security.android)
     implementation(libs.conscrypt.android)
-    // Classic mode: unpack Twoyi's rootfs.7z
-    implementation(libs.commons.compress)
-    implementation(libs.xz)
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test:2.0.21")
 }

@@ -41,7 +41,7 @@ interface VmEngine {
     suspend fun installApk(vmId: String, apks: List<File>): Result<String>
     /** Applies a spoof profile to the running guest; the rest applies from the next start. */
     suspend fun applySpoof(vmId: String, spoof: SpoofProfile): Result<Unit> = Result.success(Unit)
-    /** Brings the shared folder up to date (Classic copies files; Modern shares the folder live). */
+    /** Brings the shared folder up to date (the engine shares it live, so nothing to copy). */
     suspend fun syncShared(vmId: String): Result<Unit> = Result.success(Unit)
     /**
      * Reconnects to a machine that was running when the app last closed.

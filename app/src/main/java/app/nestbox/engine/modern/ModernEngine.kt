@@ -74,10 +74,6 @@ class ModernEngine(
         val dir = guestDir(vm.id)
         if (File(dir, "system.img").isFile) return@withContext
         val rom = Catalog.rom(vm.romId)
-        if (rom.source is Catalog.Source.Port) {
-            roms.ensurePort(rom, dir, onProgress)
-            return@withContext
-        }
         val vrom = roms.ensure(rom, vm.id, vm.importUri) { p, t -> onProgress(p * 0.7f, t) }
         unpackVrom(vrom, dir) { p, t -> onProgress(0.7f + p * 0.3f, t) }
         roms.delete(rom, vm.id) // imported copies are not kept twice

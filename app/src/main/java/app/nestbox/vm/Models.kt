@@ -24,8 +24,8 @@ data class Snapshot(val name: String, @SerialName("when") val time: String, val 
 data class VmConfig(
     val id: String,
     val name: String,
-    /** Engine mode: [Catalog.MODERN] (Wayondroid, Android 13) or [Catalog.CLASSIC] (Twoyi improved, Android 8.1). */
-    val engine: String = Catalog.CLASSIC,
+    /** Engine mode: [Catalog.MODERN] (machines from the removed Classic mode are dropped on load). */
+    val engine: String = Catalog.MODERN,
     val romId: String,
     /** content:// URI of an imported ROM file (import ROM entries only). */
     val importUri: String? = null,

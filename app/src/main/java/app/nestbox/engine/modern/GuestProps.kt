@@ -50,24 +50,17 @@ object GuestProps {
         assets: android.content.res.AssetManager,
     ) {
         guest.mkdirs()
-        val q = rom.compat == "q"
         val props = (if (lowMemory) LOW_MEMORY else emptyList()) + rom.props + Spoof.bootProps(vm.spoof)
         File(guest, "nestbox.prop").writeText(props.joinToString(NL, postfix = NL))
-        val remove = rom.remove + (if (vm.root) emptyList() else listOf(SU)) + (if (q) emptyList() else listOf("/$Q_MARKER"))
+        val remove = rom.remove + (if (vm.root) emptyList() else listOf(SU))
         File(guest, "nestbox.remove").writeText(remove.joinToString(NL, postfix = NL))
+        // Left by the removed Android 10 port
+        File(guest, "nestbox.compat-q").delete()
 
         val files = File(guest, "nestbox.files")
         files.deleteRecursively()
-        // Android 10 GSIs: Waydroid's Android 10 init (container patches: no fatal mmap entropy or
-        // SELinux process-label checks), and the marker that turns on tawcroot's SELinux shims.
-        val compatMarker = File(guest, "nestbox.compat-q")
-        if (q) {
-            // assets/guest/android10/overlay mirrors the guest: Waydroid's Android 10 init, its HIDL
-            // library (the vendor's display HAL needs isHostHwBinder) and the hosthals.xml it reads
-            copyAssetTree(assets, "guest/android10/overlay", files)
-            File(files, Q_MARKER).writeText("1\n")
-            compatMarker.writeText("1\n")
-        } else compatMarker.delete()
+        // assets/guest/<rom id>/ mirrors the guest: files a ROM needs on top of its images
+        if (assets.list("guest/${rom.id}").orEmpty().isNotEmpty()) copyAssetTree(assets, "guest/${rom.id}", files)
         val nbsu = File(libDir, "libnbsu.so")
         if (nbsu.isFile) {
             // nb-runas lets NestBox's own root commands run as another user (location as shell).
@@ -84,8 +77,6 @@ object GuestProps {
     }
 
     private const val SU = "/system/xbin/su"
-    /** In the guest's root: tawcroot reads it to enable the Android 10 SELinux shims. */
-    private const val Q_MARKER = ".nestbox-selinux-compat"
     private const val NL = "\n"
 
     /** Copies an asset folder into [dst]; files under a bin/ folder get 0755, others 0644. */

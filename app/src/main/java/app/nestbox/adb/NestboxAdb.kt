@@ -96,7 +96,7 @@ class NestboxAdb private constructor(context: Context) : AbsAdbConnectionManager
     companion object {
         @Volatile private var instance: NestboxAdb? = null
 
-        /** A separate connection with the same key, for a Classic guest's adbd (machine process). */
+        /** A separate connection with the same key (for another adbd than the phone's own). */
         fun newConnection(context: Context): NestboxAdb = NestboxAdb(context.applicationContext)
 
         fun get(context: Context): NestboxAdb =

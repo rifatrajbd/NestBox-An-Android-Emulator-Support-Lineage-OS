@@ -8,7 +8,6 @@ import androidx.core.content.ContextCompat
 import app.nestbox.adb.PairState
 import app.nestbox.adb.PairingService
 import app.nestbox.adb.ProcessLimit
-import app.nestbox.engine.ClassicBusyException
 import app.nestbox.engine.MachineFiles
 import app.nestbox.engine.NoFreeSlotException
 import app.nestbox.service.Heartbeat
@@ -305,8 +304,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (wasKilled) showToast("Resumed from last saved state")
             } catch (_: NoFreeSlotException) {
                 showToast("Stop a machine first · ${VmService.SLOTS} can run at once")
-            } catch (e: ClassicBusyException) {
-                showToast("Stop ${repo.get(e.running)?.name ?: "the other machine"} first · one Classic machine runs at a time")
             }
         }
     }
@@ -367,11 +364,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // ---- Wizard
     private fun newDraft() = WizardDraft(name = "Machine " + (repo.vms.value.size + 1), preset = app.settings.settings.value.defaultPreset)
 
-    /** Switches the wizard between Modern and Classic, picking that mode's first system. */
-    fun setDraftEngine(engine: String) = _draft.update {
-        it.copy(engine = engine, rom = Catalog.romsFor(engine).first().id, importUri = null, importName = null)
-    }
-
     fun setDraftImport(uri: Uri) {
         runCatching { app.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
         val name = app.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
@@ -416,16 +408,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (status(vm) == VmStatus.Running) viewModelScope.launch { engine.applySpoof(id, profile) }
     }
 
-    /** Reads the shared folder; Classic machines copy their side over first. */
-    fun refreshShared(vmId: String) {
-        viewModelScope.launch {
-            _sharedFiles.value = listShared()
-            val vm = repo.get(vmId) ?: return@launch
-            if (vm.shared && vm.engine == Catalog.CLASSIC && status(vm) == VmStatus.Running) {
-                engine.syncShared(vmId)
-                _sharedFiles.value = listShared()
-            }
-        }
+    /** Reads the shared folder (machines see it live as /sdcard/Host). */
+    fun refreshShared(@Suppress("UNUSED_PARAMETER") vmId: String) {
+        viewModelScope.launch { _sharedFiles.value = listShared() }
     }
 
     private suspend fun listShared(): List<SharedFile> = withContext(Dispatchers.IO) {

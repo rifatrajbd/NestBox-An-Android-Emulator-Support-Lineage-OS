@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
-"""Fetches the two guest engines' native libraries into app/src/main/jniLibs/arm64-v8a.
+"""Fetches the guest engine's native libraries into app/src/main/jniLibs/arm64-v8a.
 
-Modern mode  = Wayondroid (github.com/yoro1836/wayondroid, GPL-3.0; tawcroot is MIT).
-Classic mode = Twoyi 0.5.4 (github.com/twoyi/twoyi, MPL-2.0; libOpenglRender.so is a closed blob).
-
-Twoyi's libraries have "/data/data/io.twoyi" built in. They are rewritten byte for byte to
-"/data/data/app.nbox" (Nestbox's applicationId), which is exactly the same length.
+Engine = Wayondroid (github.com/yoro1836/wayondroid, GPL-3.0; tawcroot is MIT).
 
 libtawcroot.so and libvine_helper.so are NOT taken from the APK: NestBox builds them from
 Wayondroid's source with its own patches (scripts/build_tawcroot.sh, scripts/build_helper.sh).
@@ -27,10 +23,6 @@ WAYONDROID = (
     "https://github.com/yoro1836/wayondroid/releases/download/dev/wayondroid-debug.apk",
     "785ad82a1b135e7b85419c17b5098337a1f339847d8a837749d03474bda7207e",
 )
-TWOYI = (
-    "https://github.com/twoyi/twoyi/releases/download/0.5.4/twoyi_0.5.4-03211927-release.apk",
-    "ca5e25b3d1852c3b9df8f776f5798269de3c3c40fbf4b92c3768f483ee1a71b5",
-)
 
 # Wayondroid libraries Nestbox needs (its AndroidX helpers come from Nestbox's own dependencies).
 WAYONDROID_LIBS = [
@@ -39,11 +31,6 @@ WAYONDROID_LIBS = [
     "libvine_lmkd.so", "libvine_mediascan.so", "libvine_pulse.so", "libvine_runtime.so",
     "libvine_vk_gfxstream.so", "libvine_vold_shim.so", "libvine_wl.so",
 ]
-TWOYI_LIBS = ["libtwoyi.so", "libOpenglRender.so", "libloader.so"]
-
-OLD = b"/data/data/io.twoyi"
-NEW = b"/data/data/app.nbox"
-assert len(OLD) == len(NEW)
 
 
 def fetch(url: str, sha: str, dest: Path) -> Path:
@@ -61,15 +48,10 @@ def fetch(url: str, sha: str, dest: Path) -> Path:
     return dest
 
 
-def extract(apk: Path, names, patch: bool):
+def extract(apk: Path, names):
     with zipfile.ZipFile(apk) as z:
         for name in names:
-            data = z.read(f"lib/arm64-v8a/{name}")
-            if patch:
-                n = data.count(OLD)
-                data = data.replace(OLD, NEW)
-                print(f"  {name}: {n} path(s) rewritten")
-            (OUT / name).write_bytes(data)
+            (OUT / name).write_bytes(z.read(f"lib/arm64-v8a/{name}"))
 
 
 def main():
@@ -77,12 +59,8 @@ def main():
     dl.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
     w = fetch(*WAYONDROID, dl / "wayondroid-debug.apk")
-    t = fetch(*TWOYI, dl / "twoyi-0.5.4.apk")
-    print("Wayondroid:")
-    extract(w, WAYONDROID_LIBS, patch=False)
-    print("Twoyi:")
-    extract(t, TWOYI_LIBS, patch=True)
-    print(f"wrote {len(WAYONDROID_LIBS) + len(TWOYI_LIBS)} libraries to {OUT}")
+    extract(w, WAYONDROID_LIBS)
+    print(f"wrote {len(WAYONDROID_LIBS)} libraries to {OUT}")
 
 
 if __name__ == "__main__":

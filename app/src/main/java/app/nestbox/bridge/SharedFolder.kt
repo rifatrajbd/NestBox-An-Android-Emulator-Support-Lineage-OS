@@ -5,7 +5,7 @@ import java.io.File
 
 /**
  * The folder shared between the phone and a machine: /sdcard/Nestbox on the phone, /sdcard/Host in
- * the guest. Modern machines mount it live; Classic machines copy changes both ways.
+ * the guest, mounted live into the machine.
  * Boot logs (/sdcard/Nestbox/logs) stay on the phone.
  */
 object SharedFolder {

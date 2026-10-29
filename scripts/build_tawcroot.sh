@@ -5,7 +5,6 @@
 # Usage: scripts/build_tawcroot.sh <wayondroid-source-dir> <ndk-dir>
 #   source: https://codeload.github.com/yoro1836/wayondroid/tar.gz/a45f80b (the bundled build)
 #   patch:  scripts/patch_tawcroot.py is applied to tawcroot/src/syscalls_fd.c first
-#           scripts/patch_tawcroot_selinux.py (Android 10 SELinux userspace) after it
 set -euo pipefail
 
 SRC="$1/tawcroot"
@@ -20,7 +19,6 @@ CC=("$BIN/clang" --target=aarch64-linux-android29)
 
 PY="$(command -v python3 || command -v python)"
 grep -q nb_drop_dead_fds "$SRC/src/syscalls_fd.c" || "$PY" -I "$HERE/patch_tawcroot.py" "$SRC/src/syscalls_fd.c"
-grep -q SELINUX_DENY_UNKNOWN "$SRC/include/proc_shadow.h" || "$PY" -I "$HERE/patch_tawcroot_selinux.py" "$SRC"
 
 SOURCES=(sysv_sem sysv_shm proc_tcp namespace cgroup mounts uts netemu blocking ports main io strings
   filter filter_build handler dispatch rescue path path_scratch path_fold path_orchestrate path_resolve

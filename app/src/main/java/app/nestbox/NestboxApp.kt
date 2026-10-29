@@ -33,7 +33,7 @@ class NestboxApp : Application() {
         settings = SettingsStore(this)
         setup = SetupStore(this)
         checks = SetupChecks(this)
-        // Each machine runs in its own VmService process with its mode's engine (Modern or Classic).
+        // Each machine runs in its own VmService process with the container engine.
         engine = ServiceEngine(this) { settings.settings.value }
     }
 }

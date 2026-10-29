@@ -4,13 +4,13 @@ import android.content.Context
 import android.system.Os
 import java.io.File
 
-/** Erases a machine's files: config, guest system, data, snapshots and its link in Classic mode. */
+/** Erases a machine's files: config, guest system, data and snapshots. */
 object MachineFiles {
     fun dir(context: Context, id: String) = File(context.filesDir, "vms/$id")
 
     fun delete(context: Context, id: String) {
         val d = dir(context, id)
-        // The fixed Classic rootfs path may hold this machine's system (or, before 0.6.7, a link to it).
+        // Left by the removed Classic mode: Twoyi's fixed rootfs path may hold this machine's system.
         val fixed = File("/data/data/${context.packageName}/rootfs")
         if (isLink(fixed)) {
             runCatching { if (Os.readlink(fixed.path).startsWith(d.path)) Os.remove(fixed.path) }

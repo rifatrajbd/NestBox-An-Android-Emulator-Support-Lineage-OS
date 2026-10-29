@@ -20,7 +20,6 @@ import androidx.core.os.BundleCompat
 import app.nestbox.engine.FakeEngine
 import app.nestbox.engine.VmEngine
 import app.nestbox.engine.VmState
-import app.nestbox.engine.classic.ClassicEngine
 import app.nestbox.engine.modern.ModernEngine
 import app.nestbox.host.HostInfo
 import app.nestbox.settings.AppSettings
@@ -135,11 +134,10 @@ abstract class VmService : Service() {
         return START_NOT_STICKY
     }
 
-    /** Demo engine on emulators (no arm64), otherwise the machine's chosen mode. */
+    /** Demo engine on emulators (no arm64), otherwise the rootless container engine. */
     private fun engineFor(config: VmConfig, settings: AppSettings): VmEngine = when {
         !HostInfo.realEngines -> FakeEngine(HostInfo(this))
-        config.engine == Catalog.MODERN -> ModernEngine(this, settings)
-        else -> ClassicEngine(this, settings)
+        else -> ModernEngine(this, settings)
     }
 
     private fun startMachine(config: VmConfig, settings: AppSettings) {

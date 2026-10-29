@@ -33,8 +33,6 @@ import java.util.concurrent.ConcurrentHashMap
 /** Thrown when every machine slot is busy. */
 class NoFreeSlotException : IllegalStateException("All machine slots are in use")
 
-/** Classic (Twoyi) machines share one fixed rootfs path, so only one runs at a time. */
-class ClassicBusyException(val running: String) : IllegalStateException("A Classic machine is already running")
 
 /** Which VmService slot (process) each running machine uses. UI process only. */
 class SlotRegistry(context: Context) {
@@ -199,12 +197,6 @@ class ServiceEngine(private val context: Context, private val settings: () -> Ap
     override suspend fun start(vm: VmConfig, surface: Surface?) {
         val st = stateFlow(vm.id)
         if (st.value is VmState.Running || st.value is VmState.Booting) return
-        if (vm.engine == Catalog.CLASSIC) {
-            val other = modes.entries.firstOrNull { (id, mode) ->
-                id != vm.id && mode == Catalog.CLASSIC && stateFlow(id).value.let { it is VmState.Running || it is VmState.Booting }
-            }
-            if (other != null) throw ClassicBusyException(other.key)
-        }
         modes[vm.id] = vm.engine
         val slot = slots.assign(vm.id)
         val intent = Intent(context, VmService.classFor(slot))

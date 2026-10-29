@@ -45,8 +45,14 @@ class VmRepository(private val context: Context) {
 
     private fun load(): List<VmConfig> {
         val prefs = context.getSharedPreferences("repo", Context.MODE_PRIVATE)
-        val list = root.listFiles().orEmpty().sortedBy { it.name }.mapNotNull { d ->
+        val all = root.listFiles().orEmpty().sortedBy { it.name }.mapNotNull { d ->
             runCatching { json.decodeFromString(VmConfig.serializer(), File(d, "config.json").readText()) }.getOrNull()
+        }
+        // Classic (Twoyi) and the Pixel Experience port were removed in 0.8.0: their machines go too
+        val (gone, list) = all.partition { it.engine != Catalog.MODERN || it.romId in REMOVED_ROMS }
+        if (gone.isNotEmpty()) {
+            gone.forEach { app.nestbox.engine.MachineFiles.delete(context, it.id) }
+            removeClassicLeftovers()
         }
         if (list.isNotEmpty() || prefs.getBoolean("seeded", false)) return list
         // Only the demo engine (emulators, non-arm64) gets the design's sample machines, so every state can be tried.
@@ -55,9 +61,23 @@ class VmRepository(private val context: Context) {
         return demo().onEach(::write)
     }
 
+    /** Twoyi's fixed rootfs path, its loader link and boot log, from the Classic mode. */
+    private fun removeClassicLeftovers() {
+        val data = File("/data/data/" + context.packageName)
+        data.listFiles { f -> f.name == "rootfs" || f.name.startsWith("rootfs.old-") }
+            ?.forEach { app.nestbox.engine.MachineFiles.deleteTree(it) }
+        for (n in listOf("loader64", "log.txt")) runCatching { android.system.Os.remove(File(data, n).path) }
+        app.nestbox.engine.MachineFiles.deleteTree(File(data, "socket"))
+        File(context.filesDir, "roms").listFiles { f -> f.name.endsWith(".7z") || f.name.startsWith("pe10-") }?.forEach { it.delete() }
+    }
+
+    private companion object {
+        val REMOVED_ROMS = setOf("geek", "imp", "pe10")
+    }
+
     private fun demo() = listOf(
         VmConfig(
-            "vm1", "Main", Catalog.CLASSIC, "geek", preset = "balanced", res = "1080×2400", root = true, xposed = true, gms = false, keepAlive = true,
+            "vm1", "Main", Catalog.MODERN, "a13gapps", preset = "balanced", res = "1080×2400", root = true, xposed = true, gms = false, keepAlive = true,
             spoof = SpoofProfile("Tokyo", 35.6812, 139.7671, "JP", "Pixel 8", joystick = true),
             snapshots = listOf(
                 Snapshot("Clean + Magisk", "Oct 12 · 14:02", "1.4 GB"),
@@ -65,7 +85,7 @@ class VmRepository(private val context: Context) {
             ),
         ),
         VmConfig(
-            "vm2", "Game AFK", Catalog.CLASSIC, "geek", preset = "perf", res = "720×1600", root = false, xposed = false, gms = true, keepAlive = true,
+            "vm2", "Game AFK", Catalog.MODERN, "a13gapps", preset = "perf", res = "720×1600", root = false, xposed = false, gms = true, keepAlive = true,
             lastStatus = VmStatus.Killed, lastSeenMs = System.currentTimeMillis() - 2 * 60_000,
         ),
         VmConfig("vm3", "Clean test", Catalog.MODERN, "a13gapps", preset = "battery", res = "720×1600", root = false, xposed = false, gms = true, keepAlive = false),

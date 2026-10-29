@@ -11,7 +11,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Xiaomi setup: battery "No restrictions" fallback screen -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <!-- Boot logs and the shared folder live in /sdcard/Nestbox (targetSdk 28 keeps classic storage access) -->
+    <!-- Boot logs and the shared folder live in /sdcard/Nestbox (targetSdk 28 keeps legacy storage access) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <!-- Wireless debugging pairing with this phone's own adbd -->

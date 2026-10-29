@@ -108,7 +108,7 @@ fun SettingsScreen(vm: AppViewModel, nav: NavHostController) {
             Item.Info(NbIcons.Info, "Nestbox", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"),
             Item.Info(
                 NbIcons.Memory, "Engines",
-                if (HostInfo.realEngines) "Modern: Wayondroid (GPL-3.0) · Classic: Twoyi 0.5.4 (MPL-2.0)" else "Demo engine (this device is not arm64)",
+                if (HostInfo.realEngines) "Wayondroid (GPL-3.0) · tawcroot (MIT)" else "Demo engine (this device is not arm64)",
             ),
         ),
     )

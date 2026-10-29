@@ -94,21 +94,6 @@ fun WizardScreen(vm: AppViewModel, nav: NavHostController) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             when (step) {
                 0 -> {
-                    // Engine mode for this machine: Modern (Wayondroid) or Classic (Twoyi improved).
-                    Column(Modifier.padding(horizontal = 4.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Mode", style = ui(Nb.T12, 400, Nb.Text3))
-                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(Nb.RPill)).background(Nb.Surface).padding(4.dp)) {
-                            Catalog.modes.forEach { m ->
-                                val on = d.engine == m.id
-                                Box(
-                                    Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(Nb.RPill))
-                                        .background(if (on) Nb.SegmentActive else Nb.Surface).clickable { vm.setDraftEngine(m.id) },
-                                    contentAlignment = Alignment.Center,
-                                ) { Text(m.name, style = ui(Nb.T14, 500, if (on) Nb.Text else Nb.Text3)) }
-                            }
-                        }
-                        Text(Catalog.mode(d.engine).sub, style = mono(Nb.T11))
-                    }
                     Catalog.romsFor(d.engine).forEach { r ->
                         val sel = r.id == d.rom
                         val isImport = r.source == Catalog.Source.Import
@@ -184,7 +169,7 @@ fun WizardScreen(vm: AppViewModel, nav: NavHostController) {
                     val extras = listOfNotNull("Root".takeIf { d.root }, "LSPosed".takeIf { d.xposed }, "GMS".takeIf { d.gms }, "Share".takeIf { d.shared })
                     CardRows(
                         listOf(
-                            "Name" to d.name, "Mode" to Catalog.mode(d.engine).name, "System" to rom.name, "Preset" to p.name,
+                            "Name" to d.name, "System" to rom.name, "Preset" to p.name,
                             "Limits" to "${p.cores} cores · ${p.ramGb} GB", "Display" to "${d.res} · ${p.fps} fps",
                             "Extras" to (extras.joinToString(" · ").ifEmpty { "None" }),
                         )
