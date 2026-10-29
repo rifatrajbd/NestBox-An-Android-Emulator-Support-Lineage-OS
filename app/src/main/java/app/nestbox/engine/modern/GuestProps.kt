@@ -66,6 +66,13 @@ object GuestProps {
             init.parentFile?.mkdirs()
             assets.open("guest/android10/init").use { i -> init.outputStream().use { i.copyTo(it) } }
             Os.chmod(init.path, 0b111_101_101) // 0755
+            // Waydroid's HIDL library, which its vendor's display HAL needs (isHostHwBinder)
+            for (lib in assets.list("guest/android10/vndk-sp-29").orEmpty()) {
+                val dst = File(files, "system/lib64/vndk-sp-29/$lib")
+                dst.parentFile?.mkdirs()
+                assets.open("guest/android10/vndk-sp-29/$lib").use { i -> dst.outputStream().use { i.copyTo(it) } }
+                Os.chmod(dst.path, 0b110_100_100) // 0644
+            }
             File(files, Q_MARKER).writeText("1\n")
             compatMarker.writeText("1\n")
         } else compatMarker.delete()
