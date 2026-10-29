@@ -1,0 +1,51 @@
+{
+  "about": "Every system NestBox can download, with sizes and SHA-256. The app's copy is app/src/main/java/app/nestbox/vm/Catalog.kt. scripts/rom/port_gsi.py adds ports here; scripts/rom/mirror_roms.py copies the files to a GitHub release. Mirror files live at https://github.com/rifatrajbd/NestBox-An-Android-Emulator-Support-Lineage-OS/releases/tag/roms.",
+  "roms": [
+    {
+      "id": "a13gapps",
+      "engine": "modern",
+      "name": "Android 13 + Google",
+      "sdk": 33,
+      "kind": "vrom",
+      "system": {
+        "url": "https://github.com/yoro1836/wayondroid/releases/download/rom-GAPPS/waydroid-lineage20-gapps.vrom",
+        "bytes": 1157079790,
+        "sha256": "2c5fed8e18a9c8b5857c12bc4f0b564a7501df1ba02163c7cd052bbe6a48cc57",
+        "mirror": "a13gapps-system.vrom"
+      }
+    },
+    {
+      "id": "pe10",
+      "engine": "modern",
+      "name": "Pixel Experience Plus 10",
+      "sdk": 29,
+      "kind": "port",
+      "system": {
+        "url": "https://sourceforge.net/projects/androidgsi/files/PixelExperiencePlus/PixelExperience_Plus-10.0-20201105-GSI-ARM64-AB.img.xz/download",
+        "bytes": 858829168,
+        "sha256": "83f13470a6fe6692c0225ec7b91f6a3ec7feeb6fbe77f5f0527d8b35ffc6dd88",
+        "mirror": "pe10-system.img.xz"
+      },
+      "vendor": {
+        "url": "https://sourceforge.net/projects/waydroid/files/images/vendor/waydroid_arm64/lineage-17.1-20210925-MAINLINE-waydroid_arm64-vendor.zip/download",
+        "bytes": 79469894,
+        "sha256": "93c92e258bc7d04b2e84261fa2cca4fcbf4b2f7c7d82bf3e9f652a08e8c2d060",
+        "entry": "vendor.img",
+        "mirror": "pe10-vendor.zip"
+      }
+    },
+    {
+      "id": "geek",
+      "engine": "classic",
+      "name": "Android 8.1 Geek",
+      "sdk": 27,
+      "kind": "rootfs-in-apk",
+      "system": {
+        "url": "https://github.com/twoyi/twoyi/releases/download/0.5.4/twoyi_0.5.4-03211927-release.apk",
+        "bytes": 209364444,
+        "entry": "assets/rootfs.7z",
+        "mirror": "geek-twoyi-0.5.4.apk"
+      }
+    }
+  ]
+}

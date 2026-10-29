@@ -61,10 +61,12 @@ fun TransferScreen(vm: AppViewModel, nav: NavHostController, id: String) {
     val apps by vm.hostApps.collectAsStateWithLifecycle()
     val copied by vm.copied.collectAsStateWithLifecycle()
     val clip by vm.clipboardSync.collectAsStateWithLifecycle()
+    val shared by vm.sharedFiles.collectAsStateWithLifecycle()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) vm.installApkFrom(v.id, uri)
     }
     LaunchedEffect(Unit) { vm.loadHostApps() }
+    LaunchedEffect(tab) { if (tab == "files") vm.refreshShared(v.id) }
 
     Column(
         Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState())
@@ -134,7 +136,7 @@ fun TransferScreen(vm: AppViewModel, nav: NavHostController, id: String) {
                     Text("Phone  /sdcard/Nestbox", style = mono(Nb.T13, 400, Nb.Text))
                     Text("Guest  /sdcard/Host", style = mono(Nb.T13, 400, Nb.Text))
                 }
-                CardRows(vm.sharedFiles) { f ->
+                if (shared.isNotEmpty()) CardRows(shared) { f ->
                     val icon = when (f.icon) { "image" -> NbIcons.Image; "zip" -> NbIcons.Zip; else -> NbIcons.Text }
                     Row(
                         Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),

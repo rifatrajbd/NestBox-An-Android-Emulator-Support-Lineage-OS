@@ -14,10 +14,18 @@ object VmProtocol {
     const val MSG_INPUT = 5     // data: "ev" (MotionEvent)
     const val MSG_KEY = 6       // arg1: keycode
     const val MSG_VISIBLE = 7   // arg1: 1 shown, 0 minimized
+    /** A request with an answer: data "call" (id), "op" (OP_*), "files" (paths), "spoof" (JSON). */
+    const val MSG_CALL = 8
 
     // service → UI
     const val MSG_STATE = 10
     const val MSG_HEALTH = 11
+    /** Answer to MSG_CALL: data "call", "ok", "text". */
+    const val MSG_RESULT = 12
+
+    const val OP_INSTALL = "install"
+    const val OP_SPOOF = "spoof"
+    const val OP_SYNC = "sync"
 
     // Intents
     const val ACTION_START = "app.nestbox.action.START"

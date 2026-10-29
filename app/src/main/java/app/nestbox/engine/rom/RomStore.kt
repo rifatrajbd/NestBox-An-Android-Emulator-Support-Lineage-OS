@@ -194,7 +194,19 @@ class RomStore(private val context: Context) {
         }
     }
 
-    private fun open(url: String, from: Long): HttpURLConnection {
+    /** The original host first, then NestBox's GitHub copy (roms release) if there is one. */
+    private fun open(url: String, from: Long): HttpURLConnection = try {
+        connect(url, from)
+    } catch (e: IOException) {
+        val mirror = Catalog.mirrorOf(url) ?: throw e
+        try {
+            connect(mirror, from)
+        } catch (_: IOException) {
+            throw e
+        }
+    }
+
+    private fun connect(url: String, from: Long): HttpURLConnection {
         val c = URL(url).openConnection() as HttpURLConnection
         c.instanceFollowRedirects = true
         // SourceForge serves an HTML page instead of the file to browser-like clients.

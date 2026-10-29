@@ -4,6 +4,7 @@ import android.content.Context
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.Surface
+import app.nestbox.bridge.Spoof
 import app.nestbox.engine.BootLogs
 import app.nestbox.engine.ProcUtil
 import app.nestbox.engine.VmEngine
@@ -13,6 +14,7 @@ import app.nestbox.host.HostInfo
 import app.nestbox.settings.AppSettings
 import app.nestbox.vm.Catalog
 import app.nestbox.vm.Health
+import app.nestbox.vm.SpoofProfile
 import app.nestbox.vm.VmConfig
 import com.hexadecinull.vineos.`native`.VineRuntime
 import kotlinx.coroutines.CoroutineScope
@@ -151,7 +153,9 @@ class ModernEngine(
             // The rootfs only exists after the first boot extracts it, so this applies from the second boot.
             // NestBox's engine build applies these on every start, from the first boot.
             val rom = Catalog.rom(vm.romId)
-            GuestProps.writeOverlay(guestDir(vm.id), rom, settings.lowMemory)
+            GuestProps.writeOverlay(guestDir(vm.id), rom, settings.lowMemory, vm, context.applicationInfo.nativeLibraryDir)
+            if (vm.root) line("[nestbox] root on (su)", 0.46f)
+            if (vm.shared) line("[nestbox] shared folder: /sdcard/Nestbox ↔ /sdcard/Host", 0.46f)
             if (settings.lowMemory) line("[nestbox] low memory mode on", 0.46f)
             val gpu = settings.gpuAcceleration && rom.sdk >= 33
             if (settings.gpuAcceleration && !gpu) line("[nestbox] Android ${GuestProps.release(rom.sdk)} has no ANGLE: software rendering", 0.46f)
@@ -204,6 +208,110 @@ class ModernEngine(
         val cmds = (if (settings.lowMemory) GuestProps.RUNTIME_COMMANDS else emptyList()) + rom?.afterBoot.orEmpty()
         for (cmd in cmds) {
             runCatching { h.request("exec", id, "8000", *cmd.toTypedArray(), timeoutMs = 10_000) }
+        }
+        vm?.spoof?.let { p ->
+            if (p.region != "Off") sh(Spoof.liveCommands(p).joinToString("; "), 20_000)
+            startLocation(p)
+        }
+    }
+
+    /** Runs a shell command line in the guest as root. Returns "exit=N" and the output. */
+    private suspend fun sh(cmd: String, timeoutMs: Long): String {
+        val h = helper ?: throw IOException("The machine is not running")
+        val id = vm?.id ?: throw IOException("The machine is not running")
+        val r = h.request("exec", id, timeoutMs.toString(), "sh", "-c", cmd, timeoutMs = timeoutMs + 5_000)
+        if (!r.ok) throw IOException(r.payload.ifBlank { "The guest did not run the command" })
+        return r.payload
+    }
+
+    private fun exitOk(out: String) = out.lineSequence().firstOrNull() == "exit=0"
+
+    override suspend fun installApk(vmId: String, apks: List<File>): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (state.value !is VmState.Running) throw IOException("Start the machine first")
+            if (apks.isEmpty()) throw IOException("No APK was given")
+            // The guest's /data is a folder of this app, so the APKs are staged there directly.
+            val stage = File(guestDir(vmId), "rootless/data/local/tmp/nestbox-${System.currentTimeMillis()}")
+            if (!stage.mkdirs()) throw IOException("Could not stage the APK in the machine")
+            stage.setReadable(true, false)
+            stage.setExecutable(true, false)
+            try {
+                val names = apks.mapIndexed { i, f ->
+                    val n = if (i == 0) "base.apk" else "split_$i.apk"
+                    f.copyTo(File(stage, n), overwrite = true).setReadable(true, false)
+                    n
+                }
+                val g = "/data/local/tmp/${stage.name}"
+                val out = if (names.size == 1) sh("pm install -r -t $g/base.apk", 240_000)
+                else {
+                    val created = sh("pm install-create -r -t", 30_000)
+                    val session = Regex("""\[(\d+)]""").find(created)?.groupValues?.get(1)
+                        ?: throw IOException(pmError(created))
+                    for (n in names) {
+                        val w = sh("pm install-write $session $n $g/$n", 180_000)
+                        if ("Success" !in w) {
+                            runCatching { sh("pm install-abandon $session", 15_000) }
+                            throw IOException(pmError(w))
+                        }
+                    }
+                    sh("pm install-commit $session", 240_000)
+                }
+                if ("Success" !in out) throw IOException(pmError(out))
+                "Success"
+            } finally {
+                stage.deleteRecursively()
+            }
+        }
+    }
+
+    private fun pmError(out: String) = out.lineSequence().drop(1).map { it.trim() }.lastOrNull { it.isNotEmpty() }
+        ?: "The package manager refused the app"
+
+    override suspend fun applySpoof(vmId: String, spoof: SpoofProfile): Result<Unit> = runCatching {
+        val v = vm ?: throw IOException("The machine is not running")
+        vm = v.copy(spoof = spoof)
+        // Device identity and the rest apply from the next start.
+        GuestProps.writeOverlay(guestDir(vmId), Catalog.rom(v.romId), settings.lowMemory, vm!!, context.applicationInfo.nativeLibraryDir)
+        if (state.value !is VmState.Running) return@runCatching
+        sh(Spoof.liveCommands(spoof).joinToString("; "), 20_000)
+        startLocation(spoof)
+    }
+
+    private var locationJob: Job? = null
+
+    /**
+     * Location through Android's test providers ("cmd location", Android 12 and later), run as
+     * the shell user that holds the mock-location permission. Refreshed every few seconds so apps
+     * that ask for updates keep getting them.
+     */
+    private fun startLocation(p: SpoofProfile) {
+        locationJob?.cancel()
+        val v = vm ?: return
+        if (Catalog.rom(v.romId).sdk < 31) return
+        val lat = p.lat
+        val lng = p.lng
+        val providers = listOf("gps", "network")
+        if (lat == null || lng == null) {
+            locationJob = scope.launch {
+                runCatching { sh(providers.joinToString("; ") { "nb-runas 2000 cmd location providers remove-test-provider $it" }, 15_000) }
+            }
+            return
+        }
+        val at = String.format(Locale.ROOT, "%.6f,%.6f", lat, lng)
+        locationJob = scope.launch {
+            val setup = listOf("appops set com.android.shell android:mock_location allow", "cmd location set-location-enabled true") +
+                providers.flatMap {
+                    listOf(
+                        "nb-runas 2000 cmd location providers add-test-provider $it",
+                        "nb-runas 2000 cmd location providers set-test-provider-enabled $it true",
+                    )
+                }
+            runCatching { sh(setup.joinToString("; "), 20_000) }
+            val update = providers.joinToString("; ") { "nb-runas 2000 cmd location providers set-test-provider-location $it --location $at --accuracy 5" }
+            while (isActive && state.value is VmState.Running) {
+                runCatching { sh(update, 10_000) }
+                delay(5_000)
+            }
         }
     }
 
@@ -282,8 +390,8 @@ class ModernEngine(
             mapOf(
                 "engine-logs" to File(guest, "rootless/logs"),
                 "kmsg.txt" to File(guest, "rootless/rootfs/dev/kmsg"),
-                "tombstones" to File(guest, "data/tombstones"),
-                "anr" to File(guest, "data/anr"),
+                "tombstones" to File(guest, "rootless/data/tombstones"),
+                "anr" to File(guest, "rootless/data/anr"),
             ),
         )
     }
@@ -340,6 +448,7 @@ class ModernEngine(
 
     override suspend fun stop(vmId: String) {
         watchdog?.cancel()
+        locationJob?.cancel()
         closeDisplay()
         helper?.let {
             runCatching { it.request("stop", vmId, timeoutMs = 30_000) }
@@ -359,8 +468,6 @@ class ModernEngine(
             delay(3000)
         }
     }
-
-    override suspend fun installApk(vmId: String, apk: File): Result<Unit> = Result.failure(IOException("Phase 5"))
 
     override suspend fun reconnect(vm: VmConfig) = state.value is VmState.Running
 

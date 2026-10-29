@@ -4,7 +4,8 @@
 #
 # Usage: scripts/build_helper.sh <wayondroid-a45f80b-source> <android-sdk-dir>
 #   needs the SDK's cmake;3.22.1 and ndk;28.2.13676358 packages
-#   patch: scripts/patch_helper.py (packed APEXes, nestbox.prop / nestbox.remove hooks)
+#   patch: scripts/patch_helper.py (Android 10 GSIs, overlay hooks, shared folder)
+#   also builds scripts/nbsu.c (the guest su) as jniLibs/arm64-v8a/libnbsu.so
 set -euo pipefail
 
 SRC="$1/app/src/main/cpp"
@@ -21,7 +22,7 @@ BIN="$NDK/toolchains/llvm/prebuilt/windows-x86_64/bin"
 [ -d "$BIN" ] || BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
 PY="$(command -v python3 || command -v python)"
 
-"$PY" -I "$HERE/patch_helper.py" "$SRC/rootless/rootless_prep.cpp"
+"$PY" -I "$HERE/patch_helper.py" "$SRC/rootless"
 "$CMAKE" -S "$SRC" -B "$OUT" -G Ninja -DCMAKE_MAKE_PROGRAM="$NINJA" \
   -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
   -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-26 -DANDROID_STL=c++_static \
@@ -29,3 +30,6 @@ PY="$(command -v python3 || command -v python)"
 "$CMAKE" --build "$OUT" --target vine_helper
 "$BIN/llvm-strip" -o "$JNI/libvine_helper.so" "$OUT/libvine_helper.so"
 echo "staged $(stat -c %s "$JNI/libvine_helper.so") bytes at jniLibs/arm64-v8a/libvine_helper.so"
+"$BIN/clang" --target=aarch64-linux-android29 -O2 -fPIE -pie -Wall -o "$OUT/nbsu" "$HERE/nbsu.c"
+"$BIN/llvm-strip" -o "$JNI/libnbsu.so" "$OUT/nbsu"
+echo "staged $(stat -c %s "$JNI/libnbsu.so") bytes at jniLibs/arm64-v8a/libnbsu.so"

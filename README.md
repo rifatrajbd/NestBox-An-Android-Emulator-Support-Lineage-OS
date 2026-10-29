@@ -51,6 +51,10 @@ and is tuned to survive Xiaomi's HyperOS, which closes background apps aggressiv
 - **Presets** instead of sliders: Battery (pauses when minimized), Balanced, Performance
 - **Boot logs saved automatically** to `/sdcard/Nestbox/logs` when a machine fails to start
 - **Download or import** systems, and delete machines to free their storage
+- **Root inside the machine** (the phone stays unrooted): `su` for apps and shells
+- **Transfer** — copy installed phone apps (split APKs too) or any APK into a machine, and a
+  shared folder: phone `/sdcard/Nestbox` ↔ guest `/sdcard/Host`
+- **Spoof** — region (time zone, language, carrier), device model, and location (Android 12+)
 
 ## 📸 Screenshots
 
@@ -147,6 +151,19 @@ builds it on the phone: it downloads the community Pixel Experience Plus 10 gene
 speed (quick first-boot compile, no boot animation, half-length animations). Android 10 has no
 ANGLE, so it renders in software (SwiftShader). It needs about 8 GB of free storage.
 
+**Transfer** (machine card › Transfer, machine running):
+- **Apps:** **Copy** installs a phone app in the machine; **Install APK from storage** takes any APK.
+- **Files:** put files in the phone's `/sdcard/Nestbox`; the guest sees them in `/sdcard/Host`.
+  Modern machines share the folder live. Classic machines copy new and changed files both ways
+  when they boot, when the Files tab opens and when they stop.
+
+**Root:** turn on **Root** on the machine card, then restart the machine. Apps get root with
+`su`, inside the machine only. Classic uses Twoyi's built-in Superuser; Modern uses NestBox's `su`.
+
+**Spoof** (machine card › Spoof › Apply to machine): region and location apply right away on a
+running machine; the device model and the language apply from its next start. Location needs
+Android 12 or later in the guest.
+
 **Using less memory:** choose the **Balanced** preset and **720×1600**, and keep **Low memory mode**
 on (Settings › Engine; applies from the machine's second start). The RAM shown is real memory use (PSS).
 
@@ -175,6 +192,7 @@ curl -L -o build/wayondroid.tar.gz https://codeload.github.com/yoro1836/wayondro
 tar -xzf build/wayondroid.tar.gz -C build/src
 bash scripts/build_tawcroot.sh build/src/wayondroid-a45f80b /path/to/Android/Sdk/ndk/28.2.13676358
 # libvine_helper.so with NestBox's Android 10 / overlay patch
+# (also builds NestBox's guest su, scripts/nbsu.c, as libnbsu.so)
 bash scripts/build_helper.sh build/src/wayondroid-a45f80b /path/to/Android/Sdk
 
 ./gradlew assembleDebug
@@ -192,7 +210,9 @@ Engine binaries are not stored in the repository; the scripts place them in
 - `engine/modern` — drives Wayondroid's rootless helper (`libvine_helper.so --rootless`) over its line protocol; the display comes from `libvine_runtime.so`
 - `engine/classic` — Twoyi's `libtwoyi.so` and renderer. Twoyi has `/data/data/io.twoyi` built in; NestBox rewrites it byte for byte to `/data/data/app.nbox` (same length), which is why the app id is `app.nbox` and `targetSdk` is 28
 - `adb/` — Wireless debugging pairing with [libadb-android](https://github.com/MuntashirAkon/libadb-android) to lift the process limit
-- `scripts/patch_helper.py` — Android 10 GSI support (packed and suffixed APEXes, root-level zygote rc, 64-bit-only props) and the `nestbox.prop` / `nestbox.remove` hooks applied before every boot
+- `scripts/patch_helper.py` — Android 10 GSI support (packed and suffixed APEXes, root-level zygote rc, 64-bit-only props), the per-boot overlay (`nestbox.prop`, `nestbox.remove`, `nestbox.files/`) and the shared folder mount
+- `bridge/` — app installs, spoofing and the shared folder; Classic machines are reached through their adbd on `127.0.0.1:22122`
+- `scripts/rom/` — porting and mirroring tools for system images; see [docs/PORTING.md](docs/PORTING.md) and [roms/catalog.json](roms/catalog.json)
 - `scripts/patch_tawcroot.py` — the HyperOS fix: entries a process cannot `fstat` are hidden from its own `/proc/self/fd` listing (zygote aborted with "Unable to stat 4"); unpatched, the build is byte-identical to upstream
 - `design/` — the original UI design and spec (open the `.dc.html` in a browser)
 
@@ -235,10 +255,13 @@ Apps that check Play Integrity or detect virtual environments will not run in an
 - [x] Machines, wizard, Xiaomi setup, kill detection and notifications
 - [x] Modern (Android 13) and Classic (Android 8.1) engines, GPU, boot logs
 - [x] Full-screen VMOS-style view, low memory mode, delete machine
-- [ ] Root (Magisk) and LSPosed switches applied inside Modern machines
+- [x] Root switch (su) in both modes
+- [ ] Magisk and LSPosed
 - [ ] Floating window and floating ball
-- [ ] APK, file and clipboard transfer
-- [ ] Location, region and device spoofing with joystick
+- [x] APK and shared-folder transfer
+- [ ] Clipboard sync
+- [x] Region, device and location spoofing
+- [ ] Location joystick
 - [ ] Snapshots, `.nbx` export and import, repair and factory reset
 - [ ] Health monitor and thermal throttling
 - [x] Pixel Experience Plus 10 port for Modern mode

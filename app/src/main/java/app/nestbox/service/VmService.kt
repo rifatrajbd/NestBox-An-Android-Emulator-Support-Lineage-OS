@@ -79,11 +79,42 @@ abstract class VmService : Service() {
                 }
                 VmProtocol.MSG_KEY -> if (id != null) engine?.sendKey(id, msg.arg1)
                 VmProtocol.MSG_VISIBLE -> if (id != null) engine?.setVisible(id, msg.arg1 == 1)
+                VmProtocol.MSG_CALL -> call(msg.data, msg.replyTo)
             }
         }
     })
 
     override fun onBind(intent: Intent?): IBinder = messenger.binder
+
+    /** Install, spoof and shared-folder requests from the UI; the answer goes back to [to]. */
+    private fun call(data: android.os.Bundle, to: Messenger?) {
+        val callId = data.getInt("call")
+        val op = data.getString("op")
+        val files = data.getStringArrayList("files").orEmpty()
+        val spoofJson = data.getString("spoof")
+        scope.launch {
+            val id = vm?.id
+            val e = engine
+            val result: Result<String> = when {
+                id == null || e == null || state !is VmState.Running -> Result.failure(IllegalStateException("The machine is not running"))
+                op == VmProtocol.OP_INSTALL -> e.installApk(id, files.map { java.io.File(it) })
+                op == VmProtocol.OP_SPOOF -> runCatching { json.decodeFromString(app.nestbox.vm.SpoofProfile.serializer(), spoofJson!!) }
+                    .mapCatching { p ->
+                        vm = vm?.copy(spoof = p)
+                        e.applySpoof(id, p).getOrThrow()
+                        ""
+                    }
+                op == VmProtocol.OP_SYNC -> e.syncShared(id).map { "" }
+                else -> Result.failure(IllegalArgumentException("Unknown request $op"))
+            }
+            val reply = android.os.Bundle().apply {
+                putInt("call", callId)
+                putBoolean("ok", result.isSuccess)
+                putString("text", result.getOrNull() ?: result.exceptionOrNull()?.message.orEmpty())
+            }
+            to?.let { send(it, VmProtocol.MSG_RESULT, reply) }
+        }
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {

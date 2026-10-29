@@ -3,6 +3,7 @@ package app.nestbox.engine
 import android.view.MotionEvent
 import android.view.Surface
 import app.nestbox.vm.Health
+import app.nestbox.vm.SpoofProfile
 import app.nestbox.vm.VmConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,8 +34,15 @@ interface VmEngine {
     suspend fun stop(vmId: String)
     fun state(vmId: String): StateFlow<VmState>
     fun health(vmId: String): Flow<Health>
-    /** Copies an APK into the guest and installs it (bridge, phase 5). */
-    suspend fun installApk(vmId: String, apk: File): Result<Unit>
+    /**
+     * Installs an app in the running guest. [apks] is the base APK followed by its split APKs.
+     * Returns the package manager's answer.
+     */
+    suspend fun installApk(vmId: String, apks: List<File>): Result<String>
+    /** Applies a spoof profile to the running guest; the rest applies from the next start. */
+    suspend fun applySpoof(vmId: String, spoof: SpoofProfile): Result<Unit> = Result.success(Unit)
+    /** Brings the shared folder up to date (Classic copies files; Modern shares the folder live). */
+    suspend fun syncShared(vmId: String): Result<Unit> = Result.success(Unit)
     /**
      * Reconnects to a machine that was running when the app last closed.
      * Returns false and reports [VmState.Killed] if the system stopped it meanwhile.

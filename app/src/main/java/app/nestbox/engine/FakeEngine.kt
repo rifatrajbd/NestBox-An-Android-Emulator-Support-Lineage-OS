@@ -76,9 +76,9 @@ class FakeEngine(private val host: HostInfo) : VmEngine {
         }
     }
 
-    override suspend fun installApk(vmId: String, apk: File): Result<Unit> {
+    override suspend fun installApk(vmId: String, apks: List<File>): Result<String> {
         delay(400)
-        return Result.success(Unit)
+        return Result.success("Success")
     }
 
     override suspend fun reconnect(vm: VmConfig): Boolean = flowFor(vm.id).value == VmState.Running

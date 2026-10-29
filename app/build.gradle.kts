@@ -16,8 +16,8 @@ android {
         minSdk = 29
         // 28 like Twoyi: Classic mode runs the guest's ./init from app storage, which Android blocks at 29+.
         targetSdk = 28
-        versionCode = 7
-        versionName = "0.5.0"
+        versionCode = 8
+        versionName = "0.6.0"
         ndk { abiFilters += "arm64-v8a" }
     }
 

@@ -79,23 +79,35 @@ object Catalog {
         Rom("imp", CLASSIC, "Import rootfs", "FILE", "Custom", "rootfs.7z from a Twoyi release", "local file", Source.Import),
     )
 
-    /** Pixel Experience Plus 10 tuned for a rootless, 64-bit-only, software-rendered container. */
-    private val PE10_PROPS get() = listOf(
-        // 64-bit only: these phones have no 32-bit CPU mode
+    /**
+     * Building blocks for ports (docs/PORTING.md). A GSI below Android 13 on this engine needs
+     * GSI_64BIT and SOFTWARE_GL; every port gets SPEED_PROPS and PORT_AFTER_BOOT.
+     */
+    // 64-bit only: these phones have no 32-bit CPU mode
+    val GSI_64BIT get() = listOf(
         "ro.zygote=zygote64",
         "ro.product.cpu.abilist=arm64-v8a", "ro.product.cpu.abilist32=", "ro.product.cpu.abilist64=arm64-v8a",
         "ro.system.product.cpu.abilist=arm64-v8a", "ro.system.product.cpu.abilist32=",
         "ro.vendor.product.cpu.abilist=arm64-v8a", "ro.vendor.product.cpu.abilist32=",
-        // No ANGLE on Android 10: SwiftShader from Waydroid's vendor, GLES 3.0
+    )
+
+    // No ANGLE below Android 13: SwiftShader from Waydroid's vendor, GLES 3.0
+    val SOFTWARE_GL get() = listOf(
         "ro.hardware.egl=swiftshader", "ro.hardware.gralloc=default", "ro.opengles.version=196608",
         "debug.hwui.renderer=skiagl",
         "ro.apex.updatable=false",
-        // Faster: quick first-boot compile, no boot animation, no setup wizard, no rescue reboots
+    )
+
+    // Faster: quick first-boot compile, no boot animation, no setup wizard, no rescue reboots
+    val SPEED_PROPS get() = listOf(
         "pm.dexopt.first-boot=verify", "pm.dexopt.boot=verify", "pm.dexopt.install=quicken",
         "debug.sf.nobootanimation=1",
         "ro.setupwizard.mode=DISABLED",
         "persist.sys.disable_rescue=true",
     )
+
+    /** Pixel Experience Plus 10 tuned for a rootless, 64-bit-only, software-rendered container. */
+    private val PE10_PROPS get() = GSI_64BIT + SOFTWARE_GL + SPEED_PROPS
 
     /** Apps that do nothing in a VM (no phone, camera, NFC, face unlock) or only cost memory. */
     private val PE10_REMOVE get() = listOf(
@@ -115,7 +127,9 @@ object Catalog {
         "system/product/priv-app/Velvet", "system/product/priv-app/WellbeingPrebuilt",
     ).map { "/$it" }
 
-    private val PE10_AFTER_BOOT get() = listOf(
+    private val PE10_AFTER_BOOT get() = PORT_AFTER_BOOT
+
+    val PORT_AFTER_BOOT get() = listOf(
         // The setup wizard is removed, so mark the device as set up
         listOf("settings", "put", "global", "device_provisioned", "1"),
         listOf("settings", "put", "secure", "user_setup_complete", "1"),
@@ -150,6 +164,34 @@ object Catalog {
     )
 
     val devices = listOf("Real device", "Xiaomi 14", "Pixel 8", "Galaxy S24")
+
+    /** What a spoofed device reports (ro.product.*). */
+    data class Identity(val brand: String, val manufacturer: String, val model: String, val device: String, val product: String)
+
+    fun identity(device: String): Identity? = when (device) {
+        "Xiaomi 14" -> Identity("Xiaomi", "Xiaomi", "23127PN0CG", "houji", "houji_global")
+        "Pixel 8" -> Identity("google", "Google", "Pixel 8", "shiba", "shiba")
+        "Galaxy S24" -> Identity("samsung", "samsung", "SM-S921B", "e1s", "e1sxxx")
+        else -> null
+    }
+
+    /** MCC+MNC as one number ("440 / 10" -> "44010") and the SIM country for a region. */
+    fun numeric(r: Region) = r.mcc.filter { it.isDigit() }
+    fun country(r: Region) = r.code.lowercase(java.util.Locale.ROOT)
+
+    /**
+     * Copies of the downloads on NestBox's GitHub (release "roms", uploaded with
+     * scripts/rom/mirror_roms.sh). Used when the original host fails; same SHA-256 checks.
+     */
+    private const val MIRROR = "https://github.com/rifatrajbd/NestBox-An-Android-Emulator-Support-Lineage-OS/releases/download/roms/"
+    private val MIRRORS = mapOf(
+        "https://github.com/yoro1836/wayondroid/releases/download/rom-GAPPS/waydroid-lineage20-gapps.vrom" to "a13gapps-system.vrom",
+        "https://sourceforge.net/projects/androidgsi/files/PixelExperiencePlus/PixelExperience_Plus-10.0-20201105-GSI-ARM64-AB.img.xz/download" to "pe10-system.img.xz",
+        "https://sourceforge.net/projects/waydroid/files/images/vendor/waydroid_arm64/lineage-17.1-20210925-MAINLINE-waydroid_arm64-vendor.zip/download" to "pe10-vendor.zip",
+        "https://github.com/twoyi/twoyi/releases/download/0.5.4/twoyi_0.5.4-03211927-release.apk" to "geek-twoyi-0.5.4.apk",
+    )
+
+    fun mirrorOf(url: String): String? = MIRRORS[url]?.let { MIRROR + it }
 
     /** Old ROM ids from phase 1–2 builds map onto what exists now. */
     fun rom(id: String) = roms.firstOrNull { it.id == id } ?: when (id) {

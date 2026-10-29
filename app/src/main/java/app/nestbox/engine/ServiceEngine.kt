@@ -66,6 +66,23 @@ class ServiceEngine(private val context: Context, private val settings: () -> Ap
     private val healths = ConcurrentHashMap<String, MutableSharedFlow<Health>>()
     private val links = ConcurrentHashMap<String, Link>()
     private val pendingSurface = ConcurrentHashMap<String, android.os.Bundle>()
+    private val calls = ConcurrentHashMap<Int, kotlinx.coroutines.CompletableDeferred<Result<String>>>()
+    private val nextCall = java.util.concurrent.atomic.AtomicInteger(1)
+
+    /** Runs [op] in the machine's process and waits for its answer. */
+    private suspend fun request(vmId: String, op: String, timeoutMs: Long, fill: android.os.Bundle.() -> Unit): Result<String> {
+        val l = links[vmId] ?: return Result.failure(IllegalStateException("Start the machine first"))
+        val id = nextCall.getAndIncrement()
+        val d = kotlinx.coroutines.CompletableDeferred<Result<String>>()
+        calls[id] = d
+        val data = android.os.Bundle().apply { putInt("call", id); putString("op", op); fill() }
+        if (!l.call(data)) {
+            calls.remove(id)
+            return Result.failure(IllegalStateException("Start the machine first"))
+        }
+        return kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { d.await() }
+            ?: Result.failure<String>(java.io.IOException("The machine did not answer in time")).also { calls.remove(id) }
+    }
 
     private fun stateFlow(id: String) = states.getOrPut(id) { MutableStateFlow(VmState.Stopped) }
     private fun healthFlow(id: String) = healths.getOrPut(id) { MutableSharedFlow(replay = 1, extraBufferCapacity = 4) }
@@ -81,6 +98,13 @@ class ServiceEngine(private val context: Context, private val settings: () -> Ap
                 when (msg.what) {
                     VmProtocol.MSG_STATE -> stateFlow(vmId).value = VmProtocol.bundleToState(msg.data)
                     VmProtocol.MSG_HEALTH -> healthFlow(vmId).tryEmit(VmProtocol.bundleToHealth(msg.data))
+                    VmProtocol.MSG_RESULT -> {
+                        val d = msg.data
+                        calls.remove(d.getInt("call"))?.complete(
+                            if (d.getBoolean("ok")) Result.success(d.getString("text").orEmpty())
+                            else Result.failure(java.io.IOException(d.getString("text").orEmpty().ifBlank { "The machine did not answer" })),
+                        )
+                    }
                 }
             }
         })
@@ -115,6 +139,17 @@ class ServiceEngine(private val context: Context, private val settings: () -> Ap
                 else -> VmState.Killed(hb.timeMs)
             }
             unlink(vmId)
+        }
+
+        /** Sends a request whose answer comes back as MSG_RESULT. */
+        fun call(data: android.os.Bundle): Boolean {
+            val r = remote ?: return false
+            return try {
+                r.send(Message.obtain(null, VmProtocol.MSG_CALL).apply { this.data = data; replyTo = inbox })
+                true
+            } catch (_: RemoteException) {
+                false
+            }
         }
 
         fun send(what: Int) {
@@ -221,11 +256,13 @@ class ServiceEngine(private val context: Context, private val settings: () -> Ap
 
     override fun health(vmId: String): Flow<Health> = healthFlow(vmId)
 
-    override suspend fun installApk(vmId: String, apk: File): Result<Unit> {
-        // Phase 5 sends the APK to the guest over the bridge.
-        delay(400)
-        return Result.success(Unit)
-    }
+    override suspend fun installApk(vmId: String, apks: List<File>): Result<String> =
+        request(vmId, VmProtocol.OP_INSTALL, 300_000) { putStringArrayList("files", ArrayList(apks.map { it.path })) }
+
+    override suspend fun applySpoof(vmId: String, spoof: app.nestbox.vm.SpoofProfile): Result<Unit> =
+        request(vmId, VmProtocol.OP_SPOOF, 60_000) { putString("spoof", json.encodeToString(app.nestbox.vm.SpoofProfile.serializer(), spoof)) }.map { }
+
+    override suspend fun syncShared(vmId: String): Result<Unit> = request(vmId, VmProtocol.OP_SYNC, 300_000) { }.map { }
 
     override suspend fun reconnect(vm: VmConfig): Boolean {
         val hb = Heartbeat.read(context, vm.id)

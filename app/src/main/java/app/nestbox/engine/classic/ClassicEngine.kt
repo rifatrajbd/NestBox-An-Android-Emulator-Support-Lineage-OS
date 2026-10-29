@@ -7,6 +7,9 @@ import android.net.LocalSocketAddress
 import android.system.Os
 import android.view.MotionEvent
 import android.view.Surface
+import app.nestbox.bridge.GuestAdb
+import app.nestbox.bridge.SharedFolder
+import app.nestbox.bridge.Spoof
 import app.nestbox.engine.BootLogs
 import app.nestbox.engine.ProcUtil
 import app.nestbox.engine.VmEngine
@@ -16,6 +19,7 @@ import app.nestbox.host.HostInfo
 import app.nestbox.settings.AppSettings
 import app.nestbox.vm.Catalog
 import app.nestbox.vm.Health
+import app.nestbox.vm.SpoofProfile
 import app.nestbox.vm.VmConfig
 import io.twoyi.Renderer
 import kotlinx.coroutines.CompletableDeferred
@@ -133,6 +137,22 @@ class ClassicEngine(private val context: Context, private val settings: AppSetti
             setProperty("persist.sys.country", locale.country)
             setProperty("persist.sys.timezone", tz)
             setProperty("ro.sf.lcd_density", context.resources.displayMetrics.densityDpi.toString())
+            // Spoofed device and carrier: vendor/default.prop loads before build.prop, so ro.* win.
+            Spoof.bootProps(vm.spoof).forEach { kv ->
+                val (k, v) = kv.split('=', limit = 2)
+                setProperty(k, v)
+            }
+        }
+        // Android 8.1 keeps persistent properties as one file each; these beat earlier values.
+        val propDir = File(root, "data/property").apply { mkdirs() }
+        File(propDir, "persist.sys.timezone").writeText(tz)
+        File(propDir, "persist.sys.locale").writeText(locale.toLanguageTag())
+        // Twoyi's su daemon (phh Superuser) runs only while root_access is 1 or 3 (apps and adb).
+        File(propDir, "persist.sys.root_access").writeText(if (vm.root) "3" else "0")
+        // NestBox's ADB key, so the bridge connects without a prompt in the guest.
+        runCatching {
+            val keys = File(root, "data/misc/adb").apply { mkdirs() }
+            File(keys, "adb_keys").writeText(bridge.publicKeyLine())
         }
         val vendor = File(root, "vendor").let { if (it.exists()) it else File(root, "system/vendor") }
         runCatching { File(vendor, "default.prop").writer().use { props.store(it, null) } }
@@ -159,6 +179,7 @@ class ClassicEngine(private val context: Context, private val settings: AppSetti
                             if (String(buf, 0, n, Charsets.US_ASCII).startsWith("BOOT_COMPLETED")) {
                                 watchdog?.cancel()
                                 state.value = VmState.Running
+                                onRunning()
                             }
                         }
                     }
@@ -178,6 +199,15 @@ class ClassicEngine(private val context: Context, private val settings: AppSetti
                 val elapsed = (System.currentTimeMillis() - started) / 1000f
                 lines.takeLast(2).filter { it.isNotBlank() }
                     .forEach { line(it.take(160), (0.6f + elapsed / 240f).coerceAtMost(0.95f)) }
+            }
+            // Guest init shutting down: a critical service crashed (or something asked for a reboot).
+            // It cannot come back on its own, so stop now and keep the log that explains it.
+            val down = lines.firstOrNull { l -> REBOOT_MARKS.any { it in l } }
+            if (down != null) {
+                val why = lines.lastOrNull { "critical process" in it || "exited 4 times" in it }
+                    ?: lines.lastOrNull { "Reboot start" in it || "shutdown_command" in it || "powerctl" in it }
+                    ?: down
+                return fail("The guest shut itself down: " + why.substringAfter("init: ").take(140))
             }
             if (System.currentTimeMillis() - started > 6 * 60_000) return fail("The guest did not finish booting in 6 minutes")
         }
@@ -253,6 +283,11 @@ class ClassicEngine(private val context: Context, private val settings: AppSetti
 
     override suspend fun stop(vmId: String) {
         watchdog?.cancel()
+        // Bring guest-side changes back to the phone before the machine goes away.
+        if (state.value is VmState.Running && vm?.shared == true) {
+            kotlinx.coroutines.withTimeoutOrNull(20_000) { runCatching { syncShared(vmId) } }
+        }
+        bridge.close()
         runCatching { server?.close() }
         server = null
         killGuest()
@@ -269,9 +304,103 @@ class ClassicEngine(private val context: Context, private val settings: AppSetti
         }
     }
 
-    override suspend fun installApk(vmId: String, apk: File): Result<Unit> = Result.failure(IOException("Phase 5"))
+    private val bridge = GuestAdb(context)
+    private val syncLock = kotlinx.coroutines.sync.Mutex()
+
+    private fun onRunning() {
+        val v = vm ?: return
+        scope.launch {
+            if (v.spoof.region != "Off") runCatching { bridge.shRoot(Spoof.liveCommands(v.spoof).joinToString("; ")) }
+            if (v.shared) runCatching { syncShared(v.id) }
+        }
+    }
+
+    override suspend fun installApk(vmId: String, apks: List<File>): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (state.value !is VmState.Running) throw IOException("Start the machine first")
+            if (apks.isEmpty()) throw IOException("No APK was given")
+            val out = if (apks.size == 1) {
+                bridge.exec("cmd package install -r -t -S ${apks[0].length()}", apks[0])
+            } else {
+                val created = bridge.exec("cmd package install-create -r -t -S ${apks.sumOf { it.length() }}")
+                val session = Regex("""\[(\d+)]""").find(created)?.groupValues?.get(1) ?: throw IOException(pmError(created))
+                apks.forEachIndexed { i, f ->
+                    val w = bridge.exec("cmd package install-write -S ${f.length()} $session ${if (i == 0) "base" else "split_$i"}.apk -", f)
+                    if ("Success" !in w) {
+                        runCatching { bridge.exec("cmd package install-abandon $session") }
+                        throw IOException(pmError(w))
+                    }
+                }
+                bridge.exec("cmd package install-commit $session")
+            }
+            if ("Success" !in out) throw IOException(pmError(out))
+            "Success"
+        }
+    }
+
+    private fun pmError(out: String) = out.lineSequence().map { it.trim() }.lastOrNull { it.isNotEmpty() }
+        ?: "The package manager refused the app"
+
+    override suspend fun applySpoof(vmId: String, spoof: SpoofProfile): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            vm = vm?.copy(spoof = spoof)
+            if (state.value is VmState.Running) bridge.shRoot(Spoof.liveCommands(spoof).joinToString("; "))
+            Unit
+        }
+    }
+
+    /**
+     * Two-way copy between the phone's /sdcard/Nestbox and the guest's /sdcard/Host over adb.
+     * New and changed files go both ways (the newer copy wins); deletions are not copied, and a
+     * file deleted on one side since the last sync is not brought back.
+     */
+    override suspend fun syncShared(vmId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (state.value !is VmState.Running) throw IOException("Start the machine first")
+            syncLock.lock()
+            try {
+                val stateFile = File(context.filesDir, "vms/$vmId/shared-sync.txt")
+                val known = if (stateFile.isFile) stateFile.readLines().filter { it.isNotBlank() }.toSet() else emptySet()
+                val host = SharedFolder.hostDir().apply { mkdirs() }
+                val phone = SharedFolder.hostFiles().associateBy { it.path }
+                val guest = HashMap<String, GuestAdb.Dent>()
+                suspend fun walk(dir: String, rel: String) {
+                    for (d in runCatching { bridge.list(dir) }.getOrDefault(emptyList())) {
+                        val r = if (rel.isEmpty()) d.name else "$rel/${d.name}"
+                        if (d.isDir) walk("$dir/${d.name}", r) else if (d.isFile) guest[r] = d
+                    }
+                }
+                walk(SharedFolder.GUEST_DIR, "")
+                val both = HashSet<String>()
+                for (path in phone.keys + guest.keys) {
+                    val p = phone[path]
+                    val g = guest[path]
+                    val remote = SharedFolder.GUEST_DIR + "/" + path
+                    val local = File(host, path)
+                    when {
+                        p != null && g != null -> {
+                            if (p.size != g.size || kotlin.math.abs(p.mtimeSec - g.mtimeSec) > 2) {
+                                if (p.mtimeSec >= g.mtimeSec) bridge.push(local, remote, p.mtimeSec)
+                                else { bridge.pull(remote, local); local.setLastModified(g.mtimeSec * 1000) }
+                            }
+                            both += path
+                        }
+                        p != null && path !in known -> { bridge.push(local, remote, p.mtimeSec); both += path }
+                        g != null && path !in known -> { bridge.pull(remote, local); local.setLastModified(g.mtimeSec * 1000); both += path }
+                    }
+                }
+                stateFile.writeText(both.joinToString("\n"))
+            } finally {
+                syncLock.unlock()
+            }
+        }
+    }
 
     override suspend fun reconnect(vm: VmConfig) = state.value is VmState.Running
+
+    private companion object {
+        val REBOOT_MARKS = listOf("Reboot start", "shutdown_command", "sys.powerctl", "umounted /dev/block", "critical process")
+    }
 
     private fun loaderPath() = File(context.applicationInfo.nativeLibraryDir, "libloader.so").path
 }

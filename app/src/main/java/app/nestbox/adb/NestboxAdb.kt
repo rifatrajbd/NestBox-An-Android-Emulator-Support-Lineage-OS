@@ -69,6 +69,8 @@ class NestboxAdb private constructor(context: Context) : AbsAdbConnectionManager
     override fun getCertificate(): Certificate = certificate
     override fun getDeviceName(): String = "Nestbox"
 
+    fun publicKey(): java.security.PublicKey = certificate.publicKey
+
     private fun selfSigned(publicKey: java.security.PublicKey, key: PrivateKey): Certificate {
         val algorithm = "SHA512withRSA"
         val notBefore = Date()
@@ -93,6 +95,9 @@ class NestboxAdb private constructor(context: Context) : AbsAdbConnectionManager
 
     companion object {
         @Volatile private var instance: NestboxAdb? = null
+
+        /** A separate connection with the same key, for a Classic guest's adbd (machine process). */
+        fun newConnection(context: Context): NestboxAdb = NestboxAdb(context.applicationContext)
 
         fun get(context: Context): NestboxAdb =
             instance ?: synchronized(this) { instance ?: NestboxAdb(context.applicationContext).also { instance = it } }

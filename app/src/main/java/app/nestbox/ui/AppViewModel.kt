@@ -46,6 +46,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import app.nestbox.bridge.SharedFolder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -72,7 +73,8 @@ sealed interface UiEvent {
     data object AskStorage : UiEvent
 }
 
-data class HostApp(val pkg: String, val name: String, val sizeBytes: Long, val apk: File, val icon: Bitmap?)
+/** A phone app; [apks] is the base APK followed by its split APKs. */
+data class HostApp(val pkg: String, val name: String, val sizeBytes: Long, val apks: List<File>, val icon: Bitmap?)
 
 data class SharedFile(val icon: String, val name: String, val meta: String)
 
@@ -129,12 +131,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val copied: StateFlow<Set<String>> = _copied.asStateFlow()
     val clipboardSync = MutableStateFlow(true)
 
-    /** Phase 5 lists the real shared folder over the bridge. */
-    val sharedFiles = listOf(
-        SharedFile("image", "Screenshot_20261029_0912.png", "from guest · 1.1 MB · today"),
-        SharedFile("zip", "lsposed-module.zip", "from phone · 3.4 MB · yesterday"),
-        SharedFile("text", "notes.txt", "from phone · 4 KB · Oct 24"),
-    )
+    private val _sharedFiles = MutableStateFlow<List<SharedFile>>(emptyList())
+    /** The newest files in the shared folder (/sdcard/Nestbox). */
+    val sharedFiles: StateFlow<List<SharedFile>> = _sharedFiles.asStateFlow()
 
     init {
         refreshSetup()
@@ -409,9 +408,47 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun applySpoof(id: String) {
         val p = spoofDraft.value
         val place = Catalog.place(p.place)
-        repo.update(id) { it.copy(spoof = p.copy(lat = place.lat, lng = place.lng)) }
+        val profile = p.copy(lat = place.lat, lng = place.lng)
+        repo.update(id) { it.copy(spoof = profile) }
         showToast("Profile applied · reopen apps to refresh")
+        // A running machine takes the region and location now; device identity at its next start.
+        val vm = repo.get(id) ?: return
+        if (status(vm) == VmStatus.Running) viewModelScope.launch { engine.applySpoof(id, profile) }
     }
+
+    /** Reads the shared folder; Classic machines copy their side over first. */
+    fun refreshShared(vmId: String) {
+        viewModelScope.launch {
+            _sharedFiles.value = listShared()
+            val vm = repo.get(vmId) ?: return@launch
+            if (vm.shared && vm.engine == Catalog.CLASSIC && status(vm) == VmStatus.Running) {
+                engine.syncShared(vmId)
+                _sharedFiles.value = listShared()
+            }
+        }
+    }
+
+    private suspend fun listShared(): List<SharedFile> = withContext(Dispatchers.IO) {
+        val root = SharedFolder.hostDir()
+        val day = SimpleDateFormat("MMM d", Locale.US)
+        SharedFolder.hostFiles().sortedByDescending { it.mtimeSec }.take(12).map { e ->
+            val ext = e.path.substringAfterLast('.', "").lowercase(Locale.ROOT)
+            val icon = when (ext) {
+                "png", "jpg", "jpeg", "webp", "gif", "heic" -> "image"
+                "zip", "apk", "7z", "rar", "gz", "tar" -> "zip"
+                else -> "text"
+            }
+            val size = File(root, e.path).length().let { b ->
+                if (b >= 1_000_000) String.format(Locale.US, "%.1f MB", b / 1e6) else "${(b + 999) / 1000} KB"
+            }
+            val ms = e.mtimeSec * 1000
+            val diffDays = ((System.currentTimeMillis() - ms) / 86_400_000L)
+            val whenText = when (diffDays) { 0L -> "today"; 1L -> "yesterday"; else -> day.format(Date(ms)) }
+            SharedFile(icon, e.path, "$size · $whenText")
+        }
+    }
+
+    private fun reason(e: Throwable) = e.message?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
 
     fun toggleJoystick(id: String) = repo.update(id) { it.copy(spoof = it.spoof.copy(joystick = !it.spoof.joystick)) }
 
@@ -429,7 +466,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         val files = listOf(ai.sourceDir) + ai.splitSourceDirs.orEmpty()
                         HostApp(
                             ai.packageName, pm.getApplicationLabel(ai).toString(), files.sumOf { File(it).length() },
-                            File(ai.sourceDir), runCatching { pm.getApplicationIcon(ai).toBitmap(96, 96) }.getOrNull(),
+                            files.map { File(it) }, runCatching { pm.getApplicationIcon(ai).toBitmap(96, 96) }.getOrNull(),
                         )
                     }
                     .sortedBy { it.name.lowercase() }
@@ -442,10 +479,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (key in _copied.value) return
         val vmName = repo.get(vmId)?.name ?: return
         viewModelScope.launch {
-            engine.installApk(vmId, a.apk).onSuccess {
+            engine.installApk(vmId, a.apks).onSuccess {
                 _copied.update { it + key }
                 showToast("${a.name} installed in $vmName")
-            }.onFailure { showToast("Could not install ${a.name}") }
+            }.onFailure { showToast("Could not install ${a.name}" + reason(it)) }
         }
     }
 
@@ -461,9 +498,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 cr.openInputStream(uri)?.use { input -> out.outputStream().use { input.copyTo(it) } }
                 out to name.removeSuffix(".apk")
             }
-            engine.installApk(vmId, file)
+            engine.installApk(vmId, listOf(file))
                 .onSuccess { showToast("$name installed in $vmName") }
-                .onFailure { showToast("Could not install $name") }
+                .onFailure { showToast("Could not install $name" + reason(it)) }
+            withContext(Dispatchers.IO) { file.delete() }
         }
     }
 }

@@ -1,6 +1,9 @@
 package app.nestbox.engine.modern
 
 import android.system.Os
+import app.nestbox.bridge.SharedFolder
+import app.nestbox.bridge.Spoof
+import app.nestbox.vm.VmConfig
 import java.io.File
 
 /**
@@ -35,14 +38,44 @@ object GuestProps {
     fun release(sdk: Int) = when (sdk) { 29 -> "10"; 30 -> "11"; 31, 32 -> "12"; else -> "13" }
 
     /**
-     * nestbox.prop and nestbox.remove in the machine's folder: NestBox's build of the rootless
-     * helper (scripts/patch_helper.py) applies them before every boot, the first one included.
+     * The machine's overlay, applied before every boot (the first one included) by NestBox's build
+     * of the rootless helper (scripts/patch_helper.py):
+     * - nestbox.prop: system properties (low memory mode, the ROM's tuning, spoofing)
+     * - nestbox.remove: guest paths to delete (bloat apps; su when root is off)
+     * - nestbox.files/: files copied into the guest with their modes (su, nb-runas)
+     * - nestbox.shared: the phone folder mounted at the guest's /sdcard/Host
      */
-    fun writeOverlay(guest: File, rom: app.nestbox.vm.Catalog.Rom, lowMemory: Boolean) {
+    fun writeOverlay(guest: File, rom: app.nestbox.vm.Catalog.Rom, lowMemory: Boolean, vm: VmConfig, libDir: String) {
         guest.mkdirs()
-        val props = (if (lowMemory) LOW_MEMORY else emptyList()) + rom.props
-        File(guest, "nestbox.prop").writeText(props.joinToString("\n", postfix = "\n"))
-        File(guest, "nestbox.remove").writeText(rom.remove.joinToString("\n", postfix = "\n"))
+        val props = (if (lowMemory) LOW_MEMORY else emptyList()) + rom.props + Spoof.bootProps(vm.spoof)
+        File(guest, "nestbox.prop").writeText(props.joinToString(NL, postfix = NL))
+        val remove = rom.remove + (if (vm.root) emptyList() else listOf(SU))
+        File(guest, "nestbox.remove").writeText(remove.joinToString(NL, postfix = NL))
+
+        val files = File(guest, "nestbox.files")
+        files.deleteRecursively()
+        val nbsu = File(libDir, "libnbsu.so")
+        if (nbsu.isFile) {
+            // nb-runas lets NestBox's own root commands run as another user (location as shell).
+            install(nbsu, File(files, "system/bin/nb-runas"), 0b111_101_101)          // 0755
+            // tawcroot honours the setuid bit: su makes its caller root inside the guest only.
+            if (vm.root) install(nbsu, File(files, SU.removePrefix("/")), 0b100_111_101_101) // 04755
+        }
+
+        val shared = File(guest, "nestbox.shared")
+        if (vm.shared) {
+            val host = SharedFolder.hostDir()
+            if (host.isDirectory || host.mkdirs()) shared.writeText(host.absolutePath + NL) else shared.delete()
+        } else shared.delete()
+    }
+
+    private const val SU = "/system/xbin/su"
+    private const val NL = "\n"
+
+    private fun install(src: File, dst: File, mode: Int) {
+        dst.parentFile?.mkdirs()
+        src.copyTo(dst, overwrite = true)
+        Os.chmod(dst.path, mode)
     }
 
     /** Writes or removes the block. Returns false when the rootfs is not extracted yet. */
