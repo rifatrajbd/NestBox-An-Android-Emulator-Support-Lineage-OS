@@ -1,122 +1,248 @@
+<div align="center">
+
+<img src="docs/logo.svg" alt="NestBox logo" width="112" />
+
 # NestBox
 
-Run a second Android inside an app on your phone — **no root**. NestBox is a virtual-machine
-manager in the style of VMOS, tuned for Xiaomi phones on HyperOS, with two guest engines:
+### A second Android inside your phone — no root, no PC
 
-| Mode | Engine | Guest system | Machines at once |
-|---|---|---|---|
-| **Modern** | [Wayondroid](https://github.com/yoro1836/wayondroid) (tawcroot + userspace binder + gfxstream GPU) | LineageOS 20 · Android 13 (+ Google apps) | several |
-| **Classic** | [Twoyi](https://github.com/twoyi/twoyi) 0.5.4, improved | Android 8.1 | one |
+[![Latest release](https://img.shields.io/github/v/release/rifatrajbd/NestBox-An-Android-Emulator-Support-Lineage-OS?include_prereleases&label=release&color=4C8DFF)](https://github.com/rifatrajbd/NestBox-An-Android-Emulator-Support-Lineage-OS/releases)
+[![Downloads](https://img.shields.io/github/downloads/rifatrajbd/NestBox-An-Android-Emulator-Support-Lineage-OS/total?color=4C8DFF)](https://github.com/rifatrajbd/NestBox-An-Android-Emulator-Support-Lineage-OS/releases)
+[![Android](https://img.shields.io/badge/Android-10%2B-3DDC84?logo=android&logoColor=white)](#-device-compatibility)
+[![Guest](https://img.shields.io/badge/guest-LineageOS%2020%20%C2%B7%20Android%208.1-1f2f4d)](#-two-engines)
+[![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/rifatrajbd/NestBox-An-Android-Emulator-Support-Lineage-OS?style=flat&logo=github&color=ffb300)](https://github.com/rifatrajbd/NestBox-An-Android-Emulator-Support-Lineage-OS/stargazers)
 
-> **Status: early alpha.** Tested on one phone: Redmi Note 14 Pro+ (Snapdragon 7s Gen 3, Adreno 810,
-> 12 GB, Android 16, HyperOS 3). The Modern engine boots to the home screen there. Expect rough edges.
+</div>
 
-## Features
+NestBox runs full virtual Android machines inside a normal app, in the style of VMOS. It boots
+**LineageOS 20 (Android 13) with Google apps** on the phone's own GPU, or a light **Android 8.1**,
+and is tuned to survive Xiaomi's HyperOS, which closes background apps aggressively.
 
-- Machines in their own background processes with a foreground notification (Stop button), so HyperOS is less likely to kill them
-- Detects when HyperOS kills a machine and offers **Resume**
-- Full-screen guest, VMOS-style: phone back goes to the guest, **tap with three fingers to minimize**; the machine card keeps the last screen with **Enter** and **Power off**
-- New-machine wizard: mode, system (download or import your own file), preset (Battery / Balanced / Performance), resolution, root, LSPosed, Google services
-- Xiaomi setup screen: autostart, battery, Lock in Recents, floating windows, and the background process limit (turned off for you over Wireless debugging — no PC)
-- GPU acceleration for Modern machines (gfxstream on the phone's Vulkan driver)
-- Low memory mode for Modern machines (Android Go settings, smaller app heaps, fewer cached apps)
-- Failed boots save the guest's logs to `/sdcard/Nestbox/logs` automatically
-- Delete machines and free their storage
+> [!WARNING]
+> **Early alpha.** Tested on one phone so far (Redmi Note 14 Pro+, HyperOS 3). Expect bugs, and
+> do not keep anything important only inside a machine yet.
 
-Planned, not done yet: floating window and floating ball, APK/file/clipboard bridge, spoof profiles and joystick, snapshots and `.nbx` export, thermal throttling.
+## 📑 Contents
 
-## Requirements
+- [Features](#-features)
+- [Screenshots](#-screenshots)
+- [Two engines](#-two-engines)
+- [Device compatibility](#-device-compatibility)
+- [Download and install](#-download-and-install)
+- [First-time setup](#-first-time-setup)
+- [Using NestBox](#-using-nestbox)
+- [Build from source](#-build-from-source)
+- [FAQ and troubleshooting](#-faq-and-troubleshooting)
+- [Roadmap](#-roadmap)
+- [Credits and license](#-credits-and-license)
 
-**Phone:** arm64 Android 10 or newer (developed on Android 16 / HyperOS 3), Wi-Fi for the one-time
-Wireless debugging pairing, and free storage: about **6 GB** per Modern machine, **1.5 GB** per Classic machine.
+## ✨ Features
 
-**Build machine** (Windows or Linux):
+- **No root needed** — machines run as normal app processes on the phone's own kernel
+- **Android 13 with Google Play**, or **Android 8.1** for light use, chosen per machine
+- **GPU acceleration** through gfxstream on the phone's Vulkan driver (Adreno tested)
+- **Full-screen machines, VMOS-style** — no controls on top; tap with **three fingers** to minimize
+- **Machine cards** keep the last screen with **Enter** and **Power off**
+- **Several machines at once** (Modern mode), each in its own process with a Stop notification
+- **Survives HyperOS** — kill detection with **Resume**, plus a guided Xiaomi setup
+- **Lifts Android's 32-process limit by itself** through in-app Wireless debugging pairing, no PC
+- **Low memory mode** — Android Go settings, smaller app heaps and fewer cached apps
+- **Presets** instead of sliders: Battery (pauses when minimized), Balanced, Performance
+- **Boot logs saved automatically** to `/sdcard/Nestbox/logs` when a machine fails to start
+- **Download or import** systems, and delete machines to free their storage
+
+## 📸 Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/home.png" width="23%" alt="Machines" />
+  <img src="docs/screenshots/new-machine.png" width="23%" alt="New machine: Modern or Classic" />
+  <img src="docs/screenshots/machine.png" width="23%" alt="Minimized machine with Enter and Power off" />
+  <img src="docs/screenshots/setup.png" width="23%" alt="Xiaomi setup" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/boot.png" width="23%" alt="Boot console" />
+  <img src="docs/screenshots/settings.png" width="23%" alt="Settings" />
+</p>
+
+<p align="center"><sub>Machines · New machine · Minimized machine · Xiaomi setup · Boot console · Settings (UI shown on an emulator)</sub></p>
+
+## 🧩 Two engines
+
+Pick the mode when you create a machine.
+
+| | **Modern** | **Classic** |
+|---|---|---|
+| Engine | [Wayondroid](https://github.com/yoro1836/wayondroid): tawcroot runtime, userspace binder, gfxstream | [Twoyi](https://github.com/twoyi/twoyi) 0.5.4, improved |
+| Guest | LineageOS 20 · Android 13 (+ Google apps) | Android 8.1 (root built in) |
+| Download | 1.2 GB | 0.2 GB |
+| Storage per machine | ~6 GB | ~1.5 GB |
+| Machines at once | several | one |
+| Best for | modern apps, Play Store | light apps, older devices' apps |
+
+## 📱 Device compatibility
+
+| Phone | Status |
+|---|---|
+| Redmi Note 14 Pro+ · Snapdragon 7s Gen 3 · Adreno 810 · HyperOS 3 (Android 16) | ✅ Modern boots and runs |
+| Other Snapdragon (Adreno) phones | ❔ untested, expected to work |
+| MediaTek / Exynos (Mali) phones | ❔ untested; GPU path not tried |
+| x86_64 emulators | 🧪 demo engine only (UI testing) |
+
+**Minimum:** arm64 phone, Android 10, 6 GB RAM, 8 GB free storage.
+**Recommended:** 12 GB RAM, Adreno GPU, Wi-Fi for the one-time setup.
+
+> [!NOTE]
+> Android 4.4 and other 32-bit systems cannot run: recent phones like the Snapdragon 7s Gen 3
+> have no 32-bit CPU mode.
+
+## ⬇️ Download and install
+
+1. Download `NestBox-<version>-debug.apk` from [Releases](https://github.com/rifatrajbd/NestBox-An-Android-Emulator-Support-Lineage-OS/releases).
+2. Open it on the phone and allow installing from your browser or file manager.
+   On HyperOS, accept the security scan prompt.
+3. Open NestBox and follow the Xiaomi setup below.
+
+The app id is `app.nbox`. Debug builds are signed with a debug key, so updates install over each other.
+
+## 🛠 First-time setup
+
+The **Xiaomi setup** screen opens on first launch. Tap **Fix** on each row:
+
+| Row | What to do |
+|---|---|
+| Autostart | Turn it on in the screen that opens |
+| Battery: No restrictions | Choose *No restrictions* |
+| Lock in Recents | Open Recents, long-press the NestBox card, tap the lock |
+| Floating windows | Allow *Display pop-up windows* |
+| Background process limit | See below |
+
+**Background process limit.** Android stops apps that run more than 32 processes, and a guest runs
+60 or more. NestBox turns the limit off through Wireless debugging on the phone itself:
+
+1. Connect to Wi-Fi and tap **Open Wireless debugging**.
+2. Turn Wireless debugging on and tap **Pair device with pairing code**.
+3. Type the 6-digit code into the **NestBox notification**.
+
+> [!TIP]
+> If HyperOS refuses the change, turn on **USB debugging (Security settings)** in Developer options
+> and pair again.
+
+Allow notifications and storage when asked; storage is only used for boot logs.
+
+## 🚀 Using NestBox
+
+- **New machine** → **Modern** or **Classic** → system → preset and resolution → features → **Create and start**.
+- The first start downloads and unpacks the system. The first Android 13 boot takes several
+  minutes while it compiles apps; later boots are much faster.
+- **Inside a machine:** the phone's back gesture goes to the guest. **Tap with three fingers** (or
+  press Home) to minimize.
+- **Machine card:** last screen, live RAM and temperature, **Enter**, **Power off**, and below that
+  system switches, performance and maintenance (including **Delete machine**).
+
+**Using less memory:** choose the **Balanced** preset and **720×1600**, and keep **Low memory mode**
+on (Settings › Engine; applies from the machine's second start). The RAM shown is real memory use (PSS).
+
+## 🏗 Build from source
+
+### Requirements
 
 - JDK 17
-- Android SDK: platform 35, build-tools 35.0.0, platform-tools
-- Android NDK **28.2.13676358** (r28c) — needed to build `libtawcroot.so`
-- Python 3 and Bash (Git Bash works on Windows)
+- Android SDK: platform 35, build-tools 35.0.0
+- Android NDK **28.2.13676358** (r28c)
+- Python 3 and Bash (Git Bash on Windows)
 
-## Build
+### Steps
 
-```bash
-git clone https://github.com/rifatrajbd/NestBox-An-Android-Emulator-Support-Lineage-OS.git
-cd NestBox-An-Android-Emulator-Support-Lineage-OS
-
-# 1. Point Gradle at your SDK
+```sh
+git clone https://github.com/rifatrajbd/NestBox-An-Android-Emulator-Support-Lineage-OS.git nestbox
+cd nestbox
 echo "sdk.dir=/path/to/Android/Sdk" > local.properties
 
-# 2. Engine libraries (downloaded from the Wayondroid and Twoyi releases, checked by SHA-256)
+# Engine libraries from the Wayondroid and Twoyi releases (SHA-256 checked)
 python3 scripts/fetch_engines.py
 
-# 3. libtawcroot.so, built from Wayondroid's source with NestBox's HyperOS fix
-curl -L -o wayondroid.tar.gz https://codeload.github.com/yoro1836/wayondroid/tar.gz/a45f80b
-mkdir -p build/src && tar -xzf wayondroid.tar.gz -C build/src
+# libtawcroot.so from Wayondroid's source, with NestBox's HyperOS fix
+mkdir -p build/src
+curl -L -o build/wayondroid.tar.gz https://codeload.github.com/yoro1836/wayondroid/tar.gz/a45f80b
+tar -xzf build/wayondroid.tar.gz -C build/src
 bash scripts/build_tawcroot.sh build/src/wayondroid-a45f80b /path/to/Android/Sdk/ndk/28.2.13676358
 
-# 4. App
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The engine binaries are not stored in this repository; steps 2 and 3 put them in
-`app/src/main/jniLibs/arm64-v8a/`. Without them the app still builds, but machines cannot start on a
-phone. x86_64 emulators always use a built-in demo engine, which is handy for UI work.
+On Windows, write `sdk.dir=C\:/Users/you/AppData/Local/Android/Sdk` and run the commands in Git Bash.
+Engine binaries are not stored in the repository; the scripts place them in
+`app/src/main/jniLibs/arm64-v8a/`.
 
-## First run
+<details>
+<summary><b>How it works</b></summary>
 
-1. **Xiaomi setup** opens first. Tap **Fix** on each row:
-   - *Autostart*, *Battery: No restrictions* and *Floating windows* open the matching HyperOS screens.
-   - *Lock in Recents*: open Recents, long-press the NestBox card, tap the lock.
-   - *Background process limit*: Android stops apps that run more than 32 processes; a guest runs 60+.
-     Connect to Wi-Fi, tap **Open Wireless debugging**, turn it on, tap **Pair device with pairing code**,
-     and type the 6-digit code into the **NestBox notification**. If HyperOS refuses the change, turn on
-     **USB debugging (Security settings)** in Developer options and try again.
-2. Allow notifications and storage when asked (storage is used for boot logs).
-
-## Using it
-
-- **New machine** → pick **Modern** or **Classic** → pick a system:
-  - Modern: *Android 13 + Google* (1.2 GB download) or *Import ROM* (a Wayondroid `.vrom`)
-  - Classic: *Android 8.1 Geek* (0.2 GB download) or *Import rootfs* (`rootfs.7z` from a Twoyi release)
-- The first start downloads and unpacks the system, then boots. The first boot of Android 13 takes
-  several minutes while it compiles apps; later boots are faster.
-- In the machine: **three-finger tap** to minimize. Back from the card returns to the list.
-- **Settings**: on-screen buttons, screen fit, GPU acceleration, low memory mode, guest internet, boot logs.
-
-### Using less memory
-
-- Prefer the **Balanced** preset and **720×1600** resolution.
-- Keep **Low memory mode** on (Settings › Engine). It applies from the machine's second start.
-- The RAM figure in the app is real memory use (PSS) of the machine's processes.
-
-## Troubleshooting
-
-When a machine fails to start, NestBox saves a folder to `/sdcard/Nestbox/logs/<machine>-<time>/`
-(or `Android/data/app.nbox/files/logs` without storage permission) with the guest's logcat, crash
-reports, kernel log and engine logs. Open an issue with that folder.
-
-Known gaps: no camera, no 32-bit guest apps, only one Classic machine at a time, Android 4.4 and
-other 32-bit systems cannot run (the supported phones have no 32-bit CPU mode).
-
-## How it works
-
-- `engine/ServiceEngine` — the UI's engine: starts one `VmService` process per machine (`:vm1`…`:vm4`) and talks to it over a `Messenger`
+- `engine/ServiceEngine` — starts one `VmService` process per machine (`:vm1`…`:vm4`) and talks to it over a `Messenger`; a heartbeat file detects HyperOS kills
 - `engine/modern` — drives Wayondroid's rootless helper (`libvine_helper.so --rootless`) over its line protocol; the display comes from `libvine_runtime.so`
-- `engine/classic` — Twoyi's `libtwoyi.so` + renderer. Twoyi has `/data/data/io.twoyi` built in; NestBox rewrites it byte for byte to `/data/data/app.nbox` (same length), which is why the package name is `app.nbox` and `targetSdk` is 28
-- `adb/` — in-app Wireless debugging pairing ([libadb-android](https://github.com/MuntashirAkon/libadb-android)) to lift the background process limit
-- `scripts/patch_tawcroot.py` — the HyperOS fix: hides fd entries a process cannot `fstat` from its own `/proc/self/fd` listing (zygote aborted with "Unable to stat 4")
+- `engine/classic` — Twoyi's `libtwoyi.so` and renderer. Twoyi has `/data/data/io.twoyi` built in; NestBox rewrites it byte for byte to `/data/data/app.nbox` (same length), which is why the app id is `app.nbox` and `targetSdk` is 28
+- `adb/` — Wireless debugging pairing with [libadb-android](https://github.com/MuntashirAkon/libadb-android) to lift the process limit
+- `scripts/patch_tawcroot.py` — the HyperOS fix: entries a process cannot `fstat` are hidden from its own `/proc/self/fd` listing (zygote aborted with "Unable to stat 4"); unpatched, the build is byte-identical to upstream
 - `design/` — the original UI design and spec (open the `.dc.html` in a browser)
 
-## Credits and licenses
+</details>
 
-NestBox is licensed under the **GNU GPL v3.0** (see `LICENSE`), because it builds on Wayondroid.
+## ❓ FAQ and troubleshooting
+
+<details>
+<summary><b>A machine fails to start</b></summary>
+
+NestBox saves a folder to `/sdcard/Nestbox/logs/<machine>-<time>/` (or
+`Android/data/app.nbox/files/logs` without storage permission) with the guest's logcat, crash
+reports, kernel log and engine logs. Open an issue and attach it.
+</details>
+
+<details>
+<summary><b>The machine was closed in the background</b></summary>
+
+Finish every row of the Xiaomi setup, especially *Battery: No restrictions*, *Lock in Recents* and the
+*Background process limit*. A killed machine shows **Stopped by system** with **Resume**.
+</details>
+
+<details>
+<summary><b>It uses a lot of memory or feels slow</b></summary>
+
+Use **Balanced** and **720×1600**, keep **Low memory mode** and **GPU acceleration** on, and give the
+first boot time to finish compiling apps.
+</details>
+
+<details>
+<summary><b>Banking apps or some games refuse to run</b></summary>
+
+Apps that check Play Integrity or detect virtual environments will not run in any rootless VM.
+</details>
+
+**Known gaps:** no camera, no 32-bit guest apps, one Classic machine at a time.
+
+## 🗺 Roadmap
+
+- [x] Machines, wizard, Xiaomi setup, kill detection and notifications
+- [x] Modern (Android 13) and Classic (Android 8.1) engines, GPU, boot logs
+- [x] Full-screen VMOS-style view, low memory mode, delete machine
+- [ ] Root (Magisk) and LSPosed switches applied inside Modern machines
+- [ ] Floating window and floating ball
+- [ ] APK, file and clipboard transfer
+- [ ] Location, region and device spoofing with joystick
+- [ ] Snapshots, `.nbx` export and import, repair and factory reset
+- [ ] Health monitor and thermal throttling
+- [ ] Android 11 system for Modern mode
+
+## 🙏 Credits and license
+
+NestBox is licensed under the **[GNU GPL v3.0](LICENSE)** because it builds on Wayondroid.
 
 - [Wayondroid](https://github.com/yoro1836/wayondroid) — GPL-3.0; its tawcroot runtime is MIT
-- [Twoyi](https://github.com/twoyi/twoyi) — MPL-2.0; `libOpenglRender.so` is a closed binary from Twoyi's release and is downloaded, not redistributed
-- [Waydroid](https://waydro.id) / [LineageOS](https://lineageos.org) — the Android 13 system images
+- [Twoyi](https://github.com/twoyi/twoyi) — MPL-2.0; `libOpenglRender.so` is Twoyi's closed renderer
+- [Waydroid](https://waydro.id) and [LineageOS](https://lineageos.org) — the Android 13 system images
 - [libadb-android](https://github.com/MuntashirAkon/libadb-android), [Conscrypt](https://github.com/google/conscrypt), [Apache Commons Compress](https://commons.apache.org/proper/commons-compress/), [XZ for Java](https://tukaani.org/xz/java.html)
 - Fonts: Roboto Flex and JetBrains Mono (SIL Open Font License)
 
-Some apps (banking, Play Integrity) detect virtual environments and will not run. Spoofing features
-may break the terms of some games and services; use them responsibly.
+> [!CAUTION]
+> NestBox is a personal project, not affiliated with Xiaomi, VMOS, Waydroid, LineageOS or Google.
+> Spoofing features may break the terms of some games and services; use them responsibly.
