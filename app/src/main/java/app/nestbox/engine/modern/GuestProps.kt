@@ -32,6 +32,19 @@ object GuestProps {
         listOf("device_config", "put", "activity_manager", "max_phantom_processes", "2147483647"),
     )
 
+    fun release(sdk: Int) = when (sdk) { 29 -> "10"; 30 -> "11"; 31, 32 -> "12"; else -> "13" }
+
+    /**
+     * nestbox.prop and nestbox.remove in the machine's folder: NestBox's build of the rootless
+     * helper (scripts/patch_helper.py) applies them before every boot, the first one included.
+     */
+    fun writeOverlay(guest: File, rom: app.nestbox.vm.Catalog.Rom, lowMemory: Boolean) {
+        guest.mkdirs()
+        val props = (if (lowMemory) LOW_MEMORY else emptyList()) + rom.props
+        File(guest, "nestbox.prop").writeText(props.joinToString("\n", postfix = "\n"))
+        File(guest, "nestbox.remove").writeText(rom.remove.joinToString("\n", postfix = "\n"))
+    }
+
     /** Writes or removes the block. Returns false when the rootfs is not extracted yet. */
     fun apply(rootfs: File, lowMemory: Boolean): Boolean {
         if (!File(rootfs, "system/bin/init").exists()) return false

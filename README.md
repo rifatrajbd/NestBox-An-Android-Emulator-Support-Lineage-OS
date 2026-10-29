@@ -74,8 +74,8 @@ Pick the mode when you create a machine.
 | | **Modern** | **Classic** |
 |---|---|---|
 | Engine | [Wayondroid](https://github.com/yoro1836/wayondroid): tawcroot runtime, userspace binder, gfxstream | [Twoyi](https://github.com/twoyi/twoyi) 0.5.4, improved |
-| Guest | LineageOS 20 · Android 13 (+ Google apps) | Android 8.1 (root built in) |
-| Download | 1.2 GB | 0.2 GB |
+| Guest | LineageOS 20 · Android 13 (+ Google apps), or **Pixel Experience Plus 10** (port) | Android 8.1 (root built in) |
+| Download | 1.2 GB (Android 13) · 0.9 GB (Pixel Experience) | 0.2 GB |
 | Storage per machine | ~6 GB | ~1.5 GB |
 | Machines at once | several | one |
 | Best for | modern apps, Play Store | light apps, older devices' apps |
@@ -140,6 +140,13 @@ Allow notifications and storage when asked; storage is only used for boot logs.
 - **Machine card:** last screen, live RAM and temperature, **Enter**, **Power off**, and below that
   system switches, performance and maintenance (including **Delete machine**).
 
+**Pixel Experience Plus 10 (port, experimental).** Pick it in the Modern system list. NestBox
+builds it on the phone: it downloads the community Pixel Experience Plus 10 generic system image
+(GSI) and Waydroid's Android 10 vendor, converts the image, removes apps that do nothing in a VM
+(dialer, camera, NFC, face unlock, setup wizard, Google app, Photos, Messages) and tunes it for
+speed (quick first-boot compile, no boot animation, half-length animations). Android 10 has no
+ANGLE, so it renders in software (SwiftShader). It needs about 8 GB of free storage.
+
 **Using less memory:** choose the **Balanced** preset and **720×1600**, and keep **Low memory mode**
 on (Settings › Engine; applies from the machine's second start). The RAM shown is real memory use (PSS).
 
@@ -149,7 +156,7 @@ on (Settings › Engine; applies from the machine's second start). The RAM shown
 
 - JDK 17
 - Android SDK: platform 35, build-tools 35.0.0
-- Android NDK **28.2.13676358** (r28c)
+- Android NDK **28.2.13676358** (r28c) and CMake 3.22.1 (SDK packages)
 - Python 3 and Bash (Git Bash on Windows)
 
 ### Steps
@@ -167,6 +174,8 @@ mkdir -p build/src
 curl -L -o build/wayondroid.tar.gz https://codeload.github.com/yoro1836/wayondroid/tar.gz/a45f80b
 tar -xzf build/wayondroid.tar.gz -C build/src
 bash scripts/build_tawcroot.sh build/src/wayondroid-a45f80b /path/to/Android/Sdk/ndk/28.2.13676358
+# libvine_helper.so with NestBox's Android 10 / overlay patch
+bash scripts/build_helper.sh build/src/wayondroid-a45f80b /path/to/Android/Sdk
 
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
@@ -183,6 +192,7 @@ Engine binaries are not stored in the repository; the scripts place them in
 - `engine/modern` — drives Wayondroid's rootless helper (`libvine_helper.so --rootless`) over its line protocol; the display comes from `libvine_runtime.so`
 - `engine/classic` — Twoyi's `libtwoyi.so` and renderer. Twoyi has `/data/data/io.twoyi` built in; NestBox rewrites it byte for byte to `/data/data/app.nbox` (same length), which is why the app id is `app.nbox` and `targetSdk` is 28
 - `adb/` — Wireless debugging pairing with [libadb-android](https://github.com/MuntashirAkon/libadb-android) to lift the process limit
+- `scripts/patch_helper.py` — Android 10 GSI support (packed and suffixed APEXes, root-level zygote rc, 64-bit-only props) and the `nestbox.prop` / `nestbox.remove` hooks applied before every boot
 - `scripts/patch_tawcroot.py` — the HyperOS fix: entries a process cannot `fstat` are hidden from its own `/proc/self/fd` listing (zygote aborted with "Unable to stat 4"); unpatched, the build is byte-identical to upstream
 - `design/` — the original UI design and spec (open the `.dc.html` in a browser)
 
@@ -231,6 +241,7 @@ Apps that check Play Integrity or detect virtual environments will not run in an
 - [ ] Location, region and device spoofing with joystick
 - [ ] Snapshots, `.nbx` export and import, repair and factory reset
 - [ ] Health monitor and thermal throttling
+- [x] Pixel Experience Plus 10 port for Modern mode
 - [ ] Android 11 system for Modern mode
 
 ## 🙏 Credits and license
@@ -239,7 +250,8 @@ NestBox is licensed under the **[GNU GPL v3.0](LICENSE)** because it builds on W
 
 - [Wayondroid](https://github.com/yoro1836/wayondroid) — GPL-3.0; its tawcroot runtime is MIT
 - [Twoyi](https://github.com/twoyi/twoyi) — MPL-2.0; `libOpenglRender.so` is Twoyi's closed renderer
-- [Waydroid](https://waydro.id) and [LineageOS](https://lineageos.org) — the Android 13 system images
+- [Waydroid](https://waydro.id) and [LineageOS](https://lineageos.org) — the Android 13 system images and the Android 10 vendor
+- [Pixel Experience](https://github.com/PixelExperience) — Pixel Experience Plus 10; the GSI build comes from the community [AndroidGSI](https://sourceforge.net/projects/androidgsi/) project and is downloaded on the phone, not redistributed
 - [libadb-android](https://github.com/MuntashirAkon/libadb-android), [Conscrypt](https://github.com/google/conscrypt), [Apache Commons Compress](https://commons.apache.org/proper/commons-compress/), [XZ for Java](https://tukaani.org/xz/java.html)
 - Fonts: Roboto Flex and JetBrains Mono (SIL Open Font License)
 

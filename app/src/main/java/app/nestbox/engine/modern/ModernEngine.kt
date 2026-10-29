@@ -72,6 +72,10 @@ class ModernEngine(
         val dir = guestDir(vm.id)
         if (File(dir, "system.img").isFile) return@withContext
         val rom = Catalog.rom(vm.romId)
+        if (rom.source is Catalog.Source.Port) {
+            roms.ensurePort(rom, dir, onProgress)
+            return@withContext
+        }
         val vrom = roms.ensure(rom, vm.id, vm.importUri) { p, t -> onProgress(p * 0.7f, t) }
         unpackVrom(vrom, dir) { p, t -> onProgress(0.7f + p * 0.3f, t) }
         roms.delete(rom, vm.id) // imported copies are not kept twice
@@ -145,9 +149,12 @@ class ModernEngine(
             val dpi = (dm.densityDpi * w / dm.widthPixels.coerceAtLeast(1)).coerceIn(160, 640)
             line("[nestbox] boot ${w}x$h @ ${p.fps} · ${if (settings.gpuAcceleration) "GPU (gfxstream)" else "software rendering"}", 0.45f)
             // The rootfs only exists after the first boot extracts it, so this applies from the second boot.
-            if (GuestProps.apply(File(guestDir(vm.id), "rootless/rootfs"), settings.lowMemory)) {
-                line("[nestbox] low memory mode ${if (settings.lowMemory) "on" else "off"}", 0.46f)
-            }
+            // NestBox's engine build applies these on every start, from the first boot.
+            val rom = Catalog.rom(vm.romId)
+            GuestProps.writeOverlay(guestDir(vm.id), rom, settings.lowMemory)
+            if (settings.lowMemory) line("[nestbox] low memory mode on", 0.46f)
+            val gpu = settings.gpuAcceleration && rom.sdk >= 33
+            if (settings.gpuAcceleration && !gpu) line("[nestbox] Android ${GuestProps.release(rom.sdk)} has no ANGLE: software rendering", 0.46f)
             val reply = link.request(
                 "start", vm.id, guestDir(vm.id).path,
                 "ram_mb=${p.ramGb * 1024}",
@@ -156,7 +163,7 @@ class ModernEngine(
                 "width=$w", "height=$h", "dpi=$dpi",
                 "refresh=${p.fps}",
                 "network=${if (settings.guestInternet) "nat" else "none"}",
-                "graphics=${if (settings.gpuAcceleration) "gfxstream" else "cpu"}",
+                "graphics=${if (gpu) "gfxstream" else "cpu"}",
                 "qemu32=0",
                 timeoutMs = 180_000,
             )
@@ -177,7 +184,7 @@ class ModernEngine(
                         watchdog?.cancel()
                         state.value = VmState.Running
                         openDisplay()
-                        if (settings.lowMemory) scope.launch { tuneRunningGuest() }
+                        scope.launch { tuneRunningGuest() }
                     }
                     "error" -> scope.launch { fail(e.fields.getOrNull(2).orEmpty().ifBlank { "The machine stopped unexpectedly" }) }
                     "stopped" -> if (state.value !is VmState.Failed) state.value = VmState.Stopped
@@ -193,7 +200,9 @@ class ModernEngine(
     private suspend fun tuneRunningGuest() {
         val h = helper ?: return
         val id = vm?.id ?: return
-        for (cmd in GuestProps.RUNTIME_COMMANDS) {
+        val rom = vm?.let { Catalog.rom(it.romId) }
+        val cmds = (if (settings.lowMemory) GuestProps.RUNTIME_COMMANDS else emptyList()) + rom?.afterBoot.orEmpty()
+        for (cmd in cmds) {
             runCatching { h.request("exec", id, "8000", *cmd.toTypedArray(), timeoutMs = 10_000) }
         }
     }

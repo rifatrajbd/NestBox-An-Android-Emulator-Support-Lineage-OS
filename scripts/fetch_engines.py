@@ -7,11 +7,12 @@ Classic mode = Twoyi 0.5.4 (github.com/twoyi/twoyi, MPL-2.0; libOpenglRender.so 
 Twoyi's libraries have "/data/data/io.twoyi" built in. They are rewritten byte for byte to
 "/data/data/app.nbox" (Nestbox's applicationId), which is exactly the same length.
 
-libtawcroot.so is NOT taken from the APK: Nestbox builds it from Wayondroid's source with a
-HyperOS fix (scripts/build_tawcroot.sh, NDK r28c; unpatched it is byte-identical to upstream).
+libtawcroot.so and libvine_helper.so are NOT taken from the APK: NestBox builds them from
+Wayondroid's source with its own patches (scripts/build_tawcroot.sh, scripts/build_helper.sh).
 
 Usage:  python -I scripts/fetch_engines.py [download-dir]
         bash scripts/build_tawcroot.sh <wayondroid-a45f80b-source> <ndk-28.2.13676358>
+        bash scripts/build_helper.sh <wayondroid-a45f80b-source> <android-sdk>
 """
 import hashlib
 import sys
@@ -34,7 +35,7 @@ TWOYI = (
 # Wayondroid libraries Nestbox needs (its AndroidX helpers come from Nestbox's own dependencies).
 WAYONDROID_LIBS = [
     "libbinderd.so", "libc++_shared.so", "libgfxstream_backend.so",
-    "libvine_gralloc.so", "libvine_hal_service.so", "libvine_helper.so", "libvine_kumquat.so",
+    "libvine_gralloc.so", "libvine_hal_service.so", "libvine_kumquat.so",
     "libvine_lmkd.so", "libvine_mediascan.so", "libvine_pulse.so", "libvine_runtime.so",
     "libvine_vk_gfxstream.so", "libvine_vold_shim.so", "libvine_wl.so",
 ]

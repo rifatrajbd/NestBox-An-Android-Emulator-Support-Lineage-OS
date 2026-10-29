@@ -36,9 +36,78 @@ class RomStore(private val context: Context) {
                 is Catalog.Source.File -> download(src, out, progress)
                 is Catalog.Source.InZip -> downloadZipEntry(src, out, progress)
                 Catalog.Source.Import -> copyImport(importUri ?: throw IOException("No ROM file was chosen"), out, progress)
+                is Catalog.Source.Port -> throw IOException("Ported systems are assembled with ensurePort")
             }
             out
         }
+
+    /**
+     * Assembles a ported system in [guest]: system.img from the GSI's .img.xz (sparse images are
+     * expanded to raw ext4) and vendor.img from Waydroid's vendor zip. Downloads are kept in
+     * filesDir/roms for the next machine; the images are written straight into the machine.
+     */
+    suspend fun ensurePort(rom: Catalog.Rom, guest: File, progress: (Float, String) -> Unit) = withContext(Dispatchers.IO) {
+        val src = rom.source as Catalog.Source.Port
+        guest.mkdirs()
+        val systemImg = File(guest, "system.img")
+        val vendorImg = File(guest, "vendor.img")
+        if (!systemImg.isFile) {
+            val xz = File(dir, "${rom.id}-system.img.xz")
+            if (!xz.isFile) fetch(src.systemXzUrl, src.systemXzSha256, src.systemXzBytes, xz, "Downloading system") { p, t -> progress(p * 0.45f, t) }
+            progress(0.45f, "Unpacking system")
+            val part = File(guest, "system.img.part")
+            org.tukaani.xz.XZInputStream(xz.inputStream().buffered(1 shl 20)).use { input ->
+                val head = ByteArray(28)
+                var got = 0
+                while (got < head.size) {
+                    val n = input.read(head, got, head.size - got)
+                    if (n < 0) break
+                    got += n
+                }
+                if (SparseImage.isSparse(head)) {
+                    SparseImage.unsparse(head, input, part) { done, total ->
+                        progress(0.45f + 0.35f * done / total, "Unpacking system · ${mb(done)} / ${mb(total)}")
+                    }
+                } else {
+                    part.outputStream().buffered(1 shl 20).use { os ->
+                        os.write(head, 0, got)
+                        copy(input, os, got.toLong(), -1, "Unpacking system", progress)
+                    }
+                }
+            }
+            if (!part.renameTo(systemImg)) throw IOException("Could not save system.img")
+        }
+        if (!vendorImg.isFile) {
+            val zip = File(dir, "${rom.id}-vendor.zip")
+            if (!zip.isFile) fetch(src.vendorZipUrl, src.vendorZipSha256, src.vendorZipBytes, zip, "Downloading vendor") { p, t -> progress(0.8f + p * 0.15f, t) }
+            progress(0.95f, "Unpacking vendor")
+            java.util.zip.ZipFile(zip).use { z ->
+                val e = z.getEntry(src.vendorEntry) ?: throw IOException("${src.vendorEntry} is missing from the vendor download")
+                val part = File(guest, "vendor.img.part")
+                z.getInputStream(e).use { i -> part.outputStream().use { i.copyTo(it, 1 shl 20) } }
+                if (!part.renameTo(vendorImg)) throw IOException("Could not save vendor.img")
+            }
+        }
+        File(guest, "manifest.json").writeText("{\"kind\":\"waydroid\",\"displayName\":\"${rom.name}\",\"apiLevel\":${rom.sdk}}\n")
+        progress(1f, "System ready")
+    }
+
+    /** Resumable download of [url] to [out]; checks [sha256] when given. */
+    private suspend fun fetch(url: String, sha256: String?, bytes: Long, out: File, label: String, progress: (Float, String) -> Unit) {
+        val part = File(out.path + ".part")
+        val conn = open(url, part.length())
+        val resumed = conn.responseCode == HttpURLConnection.HTTP_PARTIAL
+        if (!resumed) part.delete()
+        conn.inputStream.use { input ->
+            java.io.FileOutputStream(part, resumed).use { os -> copy(input, os, part.length(), bytes, label, progress) }
+        }
+        if (bytes > 0 && part.length() != bytes) throw IOException("The download stopped early. Start the machine again to resume it.")
+        if (sha256 != null && !sha256(part).equals(sha256, ignoreCase = true)) {
+            part.delete()
+            throw IOException("The download is damaged (checksum mismatch). Start the machine again to retry.")
+        }
+        if (!part.renameTo(out)) throw IOException("Could not save $out")
+    }
 
     fun delete(rom: Catalog.Rom, vmId: String) {
         if (rom.source == Catalog.Source.Import) fileFor(rom, vmId).delete()
@@ -128,6 +197,8 @@ class RomStore(private val context: Context) {
     private fun open(url: String, from: Long): HttpURLConnection {
         val c = URL(url).openConnection() as HttpURLConnection
         c.instanceFollowRedirects = true
+        // SourceForge serves an HTML page instead of the file to browser-like clients.
+        c.setRequestProperty("User-Agent", "curl/8.5.0")
         c.connectTimeout = 20_000
         c.readTimeout = 60_000
         if (from > 0) c.setRequestProperty("Range", "bytes=$from-")

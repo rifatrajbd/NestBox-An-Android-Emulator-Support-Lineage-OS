@@ -16,8 +16,8 @@ android {
         minSdk = 29
         // 28 like Twoyi: Classic mode runs the guest's ./init from app storage, which Android blocks at 29+.
         targetSdk = 28
-        versionCode = 6
-        versionName = "0.4.0"
+        versionCode = 7
+        versionName = "0.5.0"
         ndk { abiFilters += "arm64-v8a" }
     }
 
@@ -67,4 +67,6 @@ dependencies {
     // Classic mode: unpack Twoyi's rootfs.7z
     implementation(libs.commons.compress)
     implementation(libs.xz)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlin:kotlin-test:2.0.21")
 }
