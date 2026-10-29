@@ -1,0 +1,6 @@
+init: Android 10 init (system/core/init) from Waydroid's LineageOS 17.1 image
+lineage-17.1-20210926-VANILLA-waydroid_arm64 (https://waydro.id), with Waydroid's container
+patches. Licensed under the Apache License 2.0 (AOSP / LineageOS).
+
+NestBox copies it over /system/bin/init of Android 10 generic system images (Pixel Experience
+Plus 10), whose stock init stops inside a container (mmap entropy, SELinux process labels).

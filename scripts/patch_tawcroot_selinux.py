@@ -10,6 +10,9 @@ is enough for Android 13. Android 10's libselinux needs two more things:
    Android 10's init sets an exec label for its vendor_init helper and stops when the host
    refuses (it is an app); the guest's policy is not enforced by anything anyway.
 
+Both apply only when the guest's root holds /.nestbox-selinux-compat (NestBox writes it for
+Android 10 machines), so Android 13 guests behave exactly as with upstream tawcroot.
+
 Usage: python3 scripts/patch_tawcroot_selinux.py <wayondroid-source>/tawcroot
 """
 import os
@@ -35,6 +38,10 @@ edit("include/proc_shadow.h", [
     ("#define TAWCROOT_PROC_SHADOW_KIND_MAX   12",
      "#define TAWCROOT_PROC_SHADOW_SELINUX_DENY_UNKNOWN 13  /* /sys/fs/selinux/deny_unknown (NestBox) */\n"
      "#define TAWCROOT_PROC_SHADOW_KIND_MAX   13"),
+    ("long tawcroot_proc_shadow_open(int kind);",
+     "long tawcroot_proc_shadow_open(int kind);\n\n"
+     "/* NestBox: 1 when the guest root holds /.nestbox-selinux-compat (Android 10 guests). */\n"
+     "int tawcroot_nestbox_selinux_compat(void);"),
 ])
 
 edit("src/proc_shadow.c", [
@@ -42,8 +49,23 @@ edit("src/proc_shadow.c", [
 			return TAWCROOT_PROC_SHADOW_SELINUX_ENFORCE;""",
      """		if (tawc_streq(path + 16, "enforce"))
 			return TAWCROOT_PROC_SHADOW_SELINUX_ENFORCE;
-		if (tawc_streq(path + 16, "deny_unknown"))
+		if (tawc_streq(path + 16, "deny_unknown") && tawcroot_nestbox_selinux_compat())
 			return TAWCROOT_PROC_SHADOW_SELINUX_DENY_UNKNOWN;"""),
+    ("""int tawcroot_proc_shadow_classify(const char *path)
+{""",
+     """int tawcroot_nestbox_selinux_compat(void)
+{
+	static int cached = -1;
+	int c = __atomic_load_n(&cached, __ATOMIC_RELAXED);
+	if (c >= 0) return c;
+	c = tawcroot_rootfs_fd >= 0 &&
+	    TAWC_RAW(TAWC_SYS_faccessat, tawcroot_rootfs_fd, (long)".nestbox-selinux-compat", 0, 0, 0, 0) == 0;
+	__atomic_store_n(&cached, c, __ATOMIC_RELAXED);
+	return c;
+}
+
+int tawcroot_proc_shadow_classify(const char *path)
+{"""),
     ("""	case TAWCROOT_PROC_SHADOW_SELINUX_ENFORCE:
 		return memfd_from_bytes("tawcroot-selinux-enforce", "0", 1);""",
      """	case TAWCROOT_PROC_SHADOW_SELINUX_ENFORCE:
@@ -69,7 +91,8 @@ edit("src/syscalls_fs.c", [
 		const size_t plen = tawc_strlen(path);
 		for (size_t ai = 0; ai < sizeof attr_tails / sizeof attr_tails[0]; ++ai) {
 			const size_t tl = tawc_strlen(attr_tails[ai]);
-			if (plen > tl && tawc_streq(path + plen - tl, attr_tails[ai]))
+			if (plen > tl && tawc_streq(path + plen - tl, attr_tails[ai]) &&
+			    tawcroot_nestbox_selinux_compat())
 				return tawc_memfd_create("tawcroot-selinux-attr",
 							 (flags & O_CLOEXEC) ? 1U : 0U);
 		}

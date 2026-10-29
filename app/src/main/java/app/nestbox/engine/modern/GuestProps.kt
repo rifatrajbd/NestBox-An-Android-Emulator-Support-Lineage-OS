@@ -45,15 +45,30 @@ object GuestProps {
      * - nestbox.files/: files copied into the guest with their modes (su, nb-runas)
      * - nestbox.shared: the phone folder mounted at the guest's /sdcard/Host
      */
-    fun writeOverlay(guest: File, rom: app.nestbox.vm.Catalog.Rom, lowMemory: Boolean, vm: VmConfig, libDir: String) {
+    fun writeOverlay(
+        guest: File, rom: app.nestbox.vm.Catalog.Rom, lowMemory: Boolean, vm: VmConfig, libDir: String,
+        assets: android.content.res.AssetManager,
+    ) {
         guest.mkdirs()
+        val q = rom.compat == "q"
         val props = (if (lowMemory) LOW_MEMORY else emptyList()) + rom.props + Spoof.bootProps(vm.spoof)
         File(guest, "nestbox.prop").writeText(props.joinToString(NL, postfix = NL))
-        val remove = rom.remove + (if (vm.root) emptyList() else listOf(SU))
+        val remove = rom.remove + (if (vm.root) emptyList() else listOf(SU)) + (if (q) emptyList() else listOf("/$Q_MARKER"))
         File(guest, "nestbox.remove").writeText(remove.joinToString(NL, postfix = NL))
 
         val files = File(guest, "nestbox.files")
         files.deleteRecursively()
+        // Android 10 GSIs: Waydroid's Android 10 init (container patches: no fatal mmap entropy or
+        // SELinux process-label checks), and the marker that turns on tawcroot's SELinux shims.
+        val compatMarker = File(guest, "nestbox.compat-q")
+        if (q) {
+            val init = File(files, "system/bin/init")
+            init.parentFile?.mkdirs()
+            assets.open("guest/android10/init").use { i -> init.outputStream().use { i.copyTo(it) } }
+            Os.chmod(init.path, 0b111_101_101) // 0755
+            File(files, Q_MARKER).writeText("1\n")
+            compatMarker.writeText("1\n")
+        } else compatMarker.delete()
         val nbsu = File(libDir, "libnbsu.so")
         if (nbsu.isFile) {
             // nb-runas lets NestBox's own root commands run as another user (location as shell).
@@ -70,6 +85,8 @@ object GuestProps {
     }
 
     private const val SU = "/system/xbin/su"
+    /** In the guest's root: tawcroot reads it to enable the Android 10 SELinux shims. */
+    private const val Q_MARKER = ".nestbox-selinux-compat"
     private const val NL = "\n"
 
     private fun install(src: File, dst: File, mode: Int) {

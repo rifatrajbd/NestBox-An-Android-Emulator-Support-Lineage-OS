@@ -32,6 +32,11 @@ object Catalog {
         val props: List<String> = emptyList(),
         /** Guest paths removed before boot (bloat), through nestbox.remove. */
         val remove: List<String> = emptyList(),
+        /**
+         * "q": an Android 10 GSI. Gets Waydroid's Android 10 init (container patches) and
+         * NestBox's SELinux shims in tawcroot (scripts/patch_tawcroot_selinux.py).
+         */
+        val compat: String? = null,
         /** Commands run in the guest after it boots (exec). */
         val afterBoot: List<List<String>> = emptyList(),
     )
@@ -65,7 +70,7 @@ object Catalog {
                 79_469_894, "93c92e258bc7d04b2e84261fa2cca4fcbf4b2f7c7d82bf3e9f652a08e8c2d060",
             ),
             gms = true, sdk = 29,
-            props = PE10_PROPS, remove = PE10_REMOVE, afterBoot = PE10_AFTER_BOOT,
+            props = PE10_PROPS, remove = PE10_REMOVE, afterBoot = PE10_AFTER_BOOT, compat = "q",
         ),
         Rom("a13imp", MODERN, "Import ROM", "FILE", "13 Custom", ".vrom file for Wayondroid", "local file", Source.Import),
         Rom(

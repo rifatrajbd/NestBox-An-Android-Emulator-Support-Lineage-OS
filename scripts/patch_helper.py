@@ -253,6 +253,22 @@ bool nb_apply_overlay(const Layout& l, std::string* error) {
     if (!props.empty()) text += "\n# nestbox-begin\n" + props + "\n# nestbox-end\n";
     else text += "\n";
     if (!mkdirs_or_fail(R + "/system/product/etc", error) || !write_mode(prop, text, 0644, error)) return false;
+    // Android 10 init does not know task_profiles (Android 11+): drop it from the engine's rc
+    if (is_regular_file(l.instance + "/nestbox.compat-q")) {
+        const std::string vrc = R + "/system/product/etc/init/vine-rootless.rc";
+        if (const auto t = read_file(vrc)) {
+            std::string out;
+            size_t at = 0;
+            while (at < t->size()) {
+                const size_t nl = t->find('\n', at);
+                const size_t end = nl == std::string::npos ? t->size() : nl + 1;
+                const std::string line = t->substr(at, end - at);
+                at = end;
+                if (line.find("task_profiles") == std::string::npos) out += line;
+            }
+            if (out != *t && !write_mode(vrc, out, 0644, error)) return false;
+        }
+    }
     if (!nb_copy_tree(l.instance + "/nestbox.files", R, error)) return false;
     const std::string init_dir = R + "/system/product/etc/init";
     const std::string shared_rc = init_dir + "/nestbox-shared.rc";

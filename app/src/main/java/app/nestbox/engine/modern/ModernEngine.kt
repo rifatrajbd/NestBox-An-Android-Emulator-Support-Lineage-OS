@@ -153,7 +153,7 @@ class ModernEngine(
             // The rootfs only exists after the first boot extracts it, so this applies from the second boot.
             // NestBox's engine build applies these on every start, from the first boot.
             val rom = Catalog.rom(vm.romId)
-            GuestProps.writeOverlay(guestDir(vm.id), rom, settings.lowMemory, vm, context.applicationInfo.nativeLibraryDir)
+            GuestProps.writeOverlay(guestDir(vm.id), rom, settings.lowMemory, vm, context.applicationInfo.nativeLibraryDir, context.assets)
             if (vm.root) line("[nestbox] root on (su)", 0.46f)
             if (vm.shared) line("[nestbox] shared folder: /sdcard/Nestbox ↔ /sdcard/Host", 0.46f)
             if (settings.lowMemory) line("[nestbox] low memory mode on", 0.46f)
@@ -271,7 +271,7 @@ class ModernEngine(
         val v = vm ?: throw IOException("The machine is not running")
         vm = v.copy(spoof = spoof)
         // Device identity and the rest apply from the next start.
-        GuestProps.writeOverlay(guestDir(vmId), Catalog.rom(v.romId), settings.lowMemory, vm!!, context.applicationInfo.nativeLibraryDir)
+        GuestProps.writeOverlay(guestDir(vmId), Catalog.rom(v.romId), settings.lowMemory, vm!!, context.applicationInfo.nativeLibraryDir, context.assets)
         if (state.value !is VmState.Running) return@runCatching
         sh(Spoof.liveCommands(spoof).joinToString("; "), 20_000)
         startLocation(spoof)
