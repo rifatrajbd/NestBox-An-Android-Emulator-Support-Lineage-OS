@@ -315,5 +315,23 @@ new = """             "/dev/pts:/dev/pts", l.run + ":/run/user/1000"}) {
 if old not in t:
     raise SystemExit("binds() not found in rootless_instance.cpp")
 t = t.replace(old, new, 1)
+
+# Android 10's init (second stage) reads INIT_STARTED_AT and INIT_SELINUX_TOOK, which its first
+# stage normally exports, straight into std::string: started without them it dies with SIGSEGV
+# and loops in its reboot handler. Android 11+ reads FIRST_STAGE_STARTED_AT and checks for null.
+old_env = """    for (const char* a : {"--", "/system/bin/init", "second_stage"}) argv.push_back(a);
+    const auto env = guest_env();"""
+new_env = """    for (const char* a : {"--", "/system/bin/init", "second_stage"}) argv.push_back(a);
+    auto env = guest_env();
+    {
+        timespec ts{};
+        clock_gettime(CLOCK_BOOTTIME, &ts);
+        const std::string now = std::to_string((int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec);
+        env.push_back("INIT_STARTED_AT=" + now);
+        env.push_back("INIT_SELINUX_TOOK=0");
+    }"""
+if old_env not in t:
+    raise SystemExit("launch_init() not found in rootless_instance.cpp")
+t = t.replace(old_env, new_env, 1)
 open(ipath, "w", encoding="utf-8").write(t)
 print("patched", ipath)
