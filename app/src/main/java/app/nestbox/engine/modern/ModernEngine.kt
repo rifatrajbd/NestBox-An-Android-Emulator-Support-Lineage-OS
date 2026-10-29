@@ -336,8 +336,17 @@ class ModernEngine(
         val started = System.currentTimeMillis()
         val kmsg = File(guestDir(vm.id), "rootless/rootfs/dev/kmsg")
         var shown = 0
+        var lastSize = -1L
+        var lastChange = started
         while (scope.isActive && state.value is VmState.Booting) {
             delay(2000)
+            val size = kmsg.length()
+            if (size != lastSize) {
+                lastSize = size
+                lastChange = System.currentTimeMillis()
+            } else if (System.currentTimeMillis() - lastChange > 5 * 60_000) {
+                return fail("The guest stopped making progress (no new boot messages for 5 minutes)")
+            }
             val lines = BootLogs.tail(kmsg, 400)
             val zygoteStarts = lines.count { "starting service 'zygote'" in it }
             val fresh = lines.takeLast(6).filter { it.isNotBlank() }
@@ -449,6 +458,11 @@ class ModernEngine(
     override suspend fun stop(vmId: String) {
         watchdog?.cancel()
         locationJob?.cancel()
+        // Powered off while still starting (a stuck boot): keep the logs that show where it hung.
+        val v = vm
+        if (v != null && state.value is VmState.Booting && settings.saveBootLogs) {
+            runCatching { collectLogs(v, "Powered off while starting") }
+        }
         closeDisplay()
         helper?.let {
             runCatching { it.request("stop", vmId, timeoutMs = 30_000) }
