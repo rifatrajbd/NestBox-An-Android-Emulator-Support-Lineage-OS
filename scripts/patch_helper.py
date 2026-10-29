@@ -149,6 +149,58 @@ bool nb_unpack_apexes(const Layout& l, std::string* error) {
     return write_file(flag, "1\n") || fail(error, "could not write " + flag);
 }
 
+// The linker checks a library's real path against ld.config's search and permitted paths.
+// /apex/<name> is a symlink here (no apexd bind mount), so libc from /apex/com.android.runtime
+// resolves to /system/apex/<folder>/... and every system binary failed to link. Each path that
+// names /apex/<name> gets a twin naming /system/apex/<folder>.
+bool nb_ld_config_twins(const std::string& R, const std::vector<std::pair<std::string, std::string>>& apex,
+                        std::string* error) {
+    const std::string etc = R + "/system/etc";
+    DIR* d = opendir(etc.c_str());
+    if (!d) return true;
+    std::vector<std::string> files;
+    while (dirent* e = readdir(d)) {
+        const std::string n = e->d_name;
+        if (n.rfind("ld.config", 0) == 0 && n.size() > 4 && n.compare(n.size() - 4, 4, ".txt") == 0) files.push_back(n);
+    }
+    closedir(d);
+    for (const auto& n : files) {
+        const std::string path = etc + "/" + n;
+        const auto text = read_file(path);
+        if (!text || text->find("# nestbox-twin") != std::string::npos) continue;
+        std::string out;
+        size_t at = 0;
+        while (at < text->size()) {
+            const size_t nl = text->find('\n', at);
+            const size_t end = nl == std::string::npos ? text->size() : nl + 1;
+            std::string line = text->substr(at, end - at);
+            at = end;
+            out += line;
+            while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
+            const size_t eq = line.find('=');
+            if (eq == std::string::npos || line.find(".paths") == std::string::npos || line.find(".paths") > eq) continue;
+            std::string key = line.substr(0, eq);
+            if (!key.empty() && key.back() == '+') key.pop_back();
+            while (!key.empty() && key.back() == ' ') key.pop_back();
+            std::string value = line.substr(eq + 1);
+            bool changed = false;
+            for (const auto& [name, dir] : apex) {
+                const std::string from = "/apex/" + name, to = "/system/apex/" + dir;
+                for (size_t p = value.find(from); p != std::string::npos; p = value.find(from, p + to.size())) {
+                    const size_t after = p + from.size();
+                    if (after < value.size() && value[after] != '/' && value[after] != ':' && value[after] != ' ') continue;
+                    if (p >= 7 && value.compare(p - 7, 7, "/system") == 0) continue;
+                    value.replace(p, from.size(), to);
+                    changed = true;
+                }
+            }
+            if (changed) out += key + " += " + value + "\n";
+        }
+        if (out != *text && !write_mode(path, "# nestbox-twin: /system/apex twins of /apex paths\n" + out, 0644, error)) return false;
+    }
+    return true;
+}
+
 // Android 10 GSIs (system-as-root, 64_32): the zygote rc lives at the image root, flattened APEX
 // folders carry a suffix (com.android.runtime.release) their manifest drops, and prop.default
 // still declares the 32-bit ABIs.
@@ -156,6 +208,7 @@ bool nb_prepare_q(const Layout& l, const PrepOptions& o, std::string* error) {
     const std::string R = l.rootfs;
     // /apex/<manifest name> for folders named differently
     const std::string adir = R + "/system/apex";
+    std::vector<std::pair<std::string, std::string>> apex_dirs; // manifest name, folder
     if (DIR* d = opendir(adir.c_str())) {
         while (dirent* e = readdir(d)) {
             const std::string n = e->d_name;
@@ -168,6 +221,7 @@ bool nb_prepare_q(const Layout& l, const PrepOptions& o, std::string* error) {
             const size_t q2 = q1 == std::string::npos ? q1 : manifest->find('"', q1 + 1);
             if (q2 == std::string::npos) continue;
             const std::string name = manifest->substr(q1 + 1, q2 - q1 - 1);
+            if (!name.empty() && name.find('/') == std::string::npos) apex_dirs.emplace_back(name, n);
             if (name.empty() || name == n || name.find('/') != std::string::npos) continue;
             struct stat st{};
             const std::string link = R + "/apex/" + name;
@@ -178,6 +232,7 @@ bool nb_prepare_q(const Layout& l, const PrepOptions& o, std::string* error) {
         }
         closedir(d);
     }
+    if (!apex_dirs.empty() && !nb_ld_config_twins(R, apex_dirs, error)) return false;
     if (o.host_has_32bit) return true;
     // Root-level zygote rc (imported by init.rc as /init.${ro.zygote}.rc)
     if (!is_regular_file(R + "/init.zygote64.rc")) {
@@ -253,6 +308,20 @@ bool nb_apply_overlay(const Layout& l, std::string* error) {
     if (!props.empty()) text += "\n# nestbox-begin\n" + props + "\n# nestbox-end\n";
     else text += "\n";
     if (!mkdirs_or_fail(R + "/system/product/etc", error) || !write_mode(prop, text, 0644, error)) return false;
+    // Android 10 loads /product/build.prop (product/etc/build.prop is Android 11+): same block there
+    if (is_regular_file(l.instance + "/nestbox.compat-q")) {
+        const std::string qprop = R + "/system/product/build.prop";
+        std::string qt = read_file(qprop).value_or("");
+        const size_t qb = qt.find("\n# nestbox-begin");
+        if (qb != std::string::npos) {
+            const size_t qe = qt.find("# nestbox-end", qb);
+            qt.erase(qb, qe == std::string::npos ? std::string::npos : qe + 14 - qb);
+        }
+        while (!qt.empty() && qt.back() == '\n') qt.pop_back();
+        if (!props.empty()) qt += "\n# nestbox-begin\n" + props + "\n# nestbox-end\n";
+        else qt += "\n";
+        if (!write_mode(qprop, qt, 0644, error)) return false;
+    }
     // Android 10 init does not know task_profiles (Android 11+): drop it from the engine's rc
     if (is_regular_file(l.instance + "/nestbox.compat-q")) {
         const std::string vrc = R + "/system/product/etc/init/vine-rootless.rc";
