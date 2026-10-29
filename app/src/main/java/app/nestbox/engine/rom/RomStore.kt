@@ -52,7 +52,8 @@ class RomStore(private val context: Context) {
         val systemImg = File(guest, "system.img")
         val vendorImg = File(guest, "vendor.img")
         if (!systemImg.isFile) {
-            val xz = File(dir, "${rom.id}-system.img.xz")
+            var xz = File(dir, "${rom.id}-system.img.xz")
+            if (!xz.isFile) xz = findLocal(src.systemXzBytes, src.systemXzSha256, progress) ?: xz
             if (!xz.isFile) fetch(src.systemXzUrl, src.systemXzSha256, src.systemXzBytes, xz, "Downloading system") { p, t -> progress(p * 0.45f, t) }
             progress(0.45f, "Unpacking system")
             val part = File(guest, "system.img.part")
@@ -78,7 +79,8 @@ class RomStore(private val context: Context) {
             if (!part.renameTo(systemImg)) throw IOException("Could not save system.img")
         }
         if (!vendorImg.isFile) {
-            val zip = File(dir, "${rom.id}-vendor.zip")
+            var zip = File(dir, "${rom.id}-vendor.zip")
+            if (!zip.isFile) zip = findLocal(src.vendorZipBytes, src.vendorZipSha256, progress) ?: zip
             if (!zip.isFile) fetch(src.vendorZipUrl, src.vendorZipSha256, src.vendorZipBytes, zip, "Downloading vendor") { p, t -> progress(0.8f + p * 0.15f, t) }
             progress(0.95f, "Unpacking vendor")
             java.util.zip.ZipFile(zip).use { z ->
@@ -90,6 +92,25 @@ class RomStore(private val context: Context) {
         }
         File(guest, "manifest.json").writeText("{\"kind\":\"waydroid\",\"displayName\":\"${rom.name}\",\"apiLevel\":${rom.sdk}}\n")
         progress(1f, "System ready")
+    }
+
+    /**
+     * A download the user already copied to the phone (by USB): any file of the exact size in
+     * /sdcard/Nestbox/roms or /sdcard/Download whose SHA-256 matches. Read in place, not copied.
+     */
+    private fun findLocal(bytes: Long, sha256: String, progress: (Float, String) -> Unit): File? {
+        @Suppress("DEPRECATION")
+        val sd = android.os.Environment.getExternalStorageDirectory()
+        val dirs = listOf(File(sd, "Nestbox/roms"), File(sd, "Download"), File(sd, "Nestbox"))
+        for (d in dirs) {
+            val files = runCatching { d.listFiles() }.getOrNull() ?: continue
+            for (f in files) {
+                if (!f.isFile || f.length() != bytes) continue
+                progress(0f, "Checking ${f.name}")
+                if (runCatching { sha256(f) }.getOrNull().equals(sha256, ignoreCase = true)) return f
+            }
+        }
+        return null
     }
 
     /** Resumable download of [url] to [out]; checks [sha256] when given. */
